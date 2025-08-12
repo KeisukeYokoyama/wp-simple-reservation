@@ -645,20 +645,31 @@
      * 予約管理の初期化
      */
     function initReservationManagement() {
+        // イベントハンドラーを初期化
+        initReservationEventHandlers();
+    }
+    
+    /**
+     * 予約イベントハンドラーを初期化
+     */
+    function initReservationEventHandlers() {
         // 編集ボタン
-        $('.wpsr-edit-reservation').on('click', function(e) {
+        $('.wpsr-edit-reservation').off('click').on('click', function(e) {
             e.preventDefault();
             const id = $(this).data('id');
             loadReservationData(id);
         });
         
-        // キャンセルボタン
-        $('.wpsr-cancel-reservation').on('click', function(e) {
+
+        
+        // 削除ボタン
+        $('.wpsr-delete-reservation').off('click').on('click', function(e) {
             e.preventDefault();
             const id = $(this).data('id');
+            const name = $(this).data('name');
             
-            if (confirm('この予約をキャンセルしますか？')) {
-                cancelReservation(id);
+            if (confirm('予約者「' + name + '」の予約を完全に削除しますか？\n\nこの操作は取り消すことができません。')) {
+                deleteReservation(id);
             }
         });
         
@@ -779,6 +790,32 @@
             type: 'POST',
             data: {
                 action: 'wpsr_cancel_reservation',
+                reservation_id: id,
+                nonce: wpsr_ajax.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.data);
+                    location.reload(); // ページを再読み込み
+                } else {
+                    alert(response.data || 'エラーが発生しました。');
+                }
+            },
+            error: function() {
+                alert('通信エラーが発生しました。');
+            }
+        });
+    }
+    
+    /**
+     * 予約を削除する
+     */
+    function deleteReservation(id) {
+        $.ajax({
+            url: wpsr_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'wpsr_delete_reservation',
                 reservation_id: id,
                 nonce: wpsr_ajax.nonce
             },

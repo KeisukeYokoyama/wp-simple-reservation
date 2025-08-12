@@ -25,6 +25,7 @@ class WPSR_Admin {
         add_action('wp_ajax_wpsr_get_reservation', array($this, 'get_reservation'));
         add_action('wp_ajax_wpsr_update_reservation', array($this, 'update_reservation'));
         add_action('wp_ajax_wpsr_cancel_reservation', array($this, 'cancel_reservation'));
+        add_action('wp_ajax_wpsr_delete_reservation', array($this, 'delete_reservation'));
         add_action('wp_ajax_wpsr_add_field', array($this, 'add_field'));
         add_action('wp_ajax_wpsr_update_field', array($this, 'update_field'));
         add_action('wp_ajax_wpsr_delete_field', array($this, 'delete_field'));
@@ -719,6 +720,35 @@ class WPSR_Admin {
         }
         
         wp_send_json_success(__('予約がキャンセルされました。', 'wp-simple-reservation'));
+    }
+    
+    /**
+     * 予約を削除する
+     */
+    public function delete_reservation() {
+        // セキュリティチェック
+        if (!wp_verify_nonce($_POST['nonce'], 'wpsr_nonce')) {
+            wp_die(__('セキュリティチェックに失敗しました。', 'wp-simple-reservation'));
+        }
+        
+        $reservation_id = intval($_POST['reservation_id']);
+        
+        if ($reservation_id <= 0) {
+            wp_send_json_error(__('無効な予約IDです。', 'wp-simple-reservation'));
+        }
+        
+        global $wpdb;
+        $result = $wpdb->delete(
+            $wpdb->prefix . 'wpsr_reservations',
+            array('id' => $reservation_id),
+            array('%d')
+        );
+        
+        if ($result === false) {
+            wp_send_json_error(__('予約の削除に失敗しました。', 'wp-simple-reservation'));
+        }
+        
+        wp_send_json_success(__('予約が削除されました。', 'wp-simple-reservation'));
     }
     
     /**
