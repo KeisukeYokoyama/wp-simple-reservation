@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Simple Reservation
  * Plugin URI: https://pejite.com/wp-simple-reservation
- * Description: シンプルな予約管理プラグイン。オンラインで空きスケジュールを確認し、予約できる。
+ * Description: WP Simple Reservationは、予約システムフォームを導入できるシンプルなプラグインです。
  * Version: 1.0.0
  * Author: Pejite
  * License: GPL v2 or later
@@ -71,6 +71,10 @@ class WP_Simple_Reservation {
         // メールマネージャーの初期化
         require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-email-manager.php';
         new WPSR_Email_Manager();
+        
+        // Googleカレンダーマネージャーの初期化
+        require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-google-calendar.php';
+        new WPSR_Google_Calendar_Manager();
     }
     
     public function init_admin() {
@@ -212,6 +216,7 @@ class WP_Simple_Reservation {
             schedule_time time NOT NULL,
             status varchar(20) DEFAULT 'pending',
             message text,
+            google_calendar_event_id varchar(255) DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
@@ -268,6 +273,7 @@ class WP_Simple_Reservation {
         // 必要なカラムの定義
         $required_columns = array(
             'message' => 'text AFTER status',
+            'google_calendar_event_id' => 'varchar(255) AFTER message',
             'birthdate' => 'date AFTER phone',
             'box_test' => 'varchar(255) AFTER birthdate',
             'text_area_test' => 'text AFTER box_test',

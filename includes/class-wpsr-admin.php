@@ -79,6 +79,15 @@ class WPSR_Admin {
             'wpsr-settings',
             array($this, 'render_settings_page')
         );
+        
+        add_submenu_page(
+            'wpsr-reservations',
+            __('Googleカレンダー連携', 'wp-simple-reservation'),
+            __('Googleカレンダー連携', 'wp-simple-reservation'),
+            'manage_options',
+            'wpsr-google-calendar',
+            array($this, 'render_google_calendar_page')
+        );
     }
     
     public function init_admin() {
@@ -98,6 +107,22 @@ class WPSR_Admin {
     }
     
     public function render_reservations_page() {
+        // エラーメッセージを表示
+        if (isset($_SESSION['wpsr_error'])) {
+            echo '<div class="notice notice-error"><p><strong>Googleカレンダー連携エラー:</strong></p>';
+            echo '<p>' . esc_html($_SESSION['wpsr_error']) . '</p>';
+            if (isset($_SESSION['wpsr_error_stack'])) {
+                echo '<details><summary>詳細エラー情報</summary>';
+                echo '<pre>' . esc_html($_SESSION['wpsr_error_stack']) . '</pre>';
+                echo '</details>';
+            }
+            echo '</div>';
+            
+            // セッションからエラーを削除
+            unset($_SESSION['wpsr_error']);
+            unset($_SESSION['wpsr_error_stack']);
+        }
+        
         // 予約一覧ページ
         include WPSR_PLUGIN_PATH . 'templates/admin/reservations.php';
     }
@@ -211,14 +236,56 @@ class WPSR_Admin {
         $reservation_id = $wpdb->insert_id;
         
         // 予約データを取得（メール送信用）
+        error_log('WPSR Debug - Getting reservation data for ID: ' . $reservation_id);
         $reservation = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}wpsr_reservations WHERE id = %d",
             $reservation_id
         ));
         
-        // メール送信
+        error_log('WPSR Debug - Reservation data: ' . print_r($reservation, true));
+        
+        // メール送信（一時的に無効化）
+        /*
         if ($reservation) {
-            $this->send_confirmation_emails($reservation);
+            error_log('WPSR Debug - Starting email sending');
+            try {
+                $this->send_confirmation_emails($reservation);
+                error_log('WPSR Debug - Email sending completed');
+            } catch (Exception $e) {
+                error_log('WPSR Email Error: ' . $e->getMessage());
+                // メール送信でエラーが発生しても予約は成功とする
+            }
+        }
+        */
+        
+        // Googleカレンダー連携
+        if ($reservation) {
+            try {
+                error_log('WPSR Debug - Google Calendar integration starting');
+                do_action('wpsr_reservation_created', $reservation_id, (array)$reservation);
+                error_log('WPSR Debug - Google Calendar integration completed');
+            } catch (Exception $e) {
+                $error_message = 'WPSR Google Calendar Error: ' . $e->getMessage();
+                $error_stack = 'WPSR Google Calendar Error Stack: ' . $e->getTraceAsString();
+                
+                error_log($error_message);
+                error_log($error_stack);
+                
+                // エラーを画面に表示するため、セッションに保存
+                if (!session_id()) {
+                    session_start();
+                }
+                $_SESSION['wpsr_error'] = $error_message;
+                $_SESSION['wpsr_error_stack'] = $error_stack;
+                
+                // 直接的なエラー出力（デバッグ用）
+                file_put_contents(WP_CONTENT_DIR . '/wpsr-error.log', 
+                    date('Y-m-d H:i:s') . ' - ' . $error_message . "\n" . $error_stack . "\n\n", 
+                    FILE_APPEND | LOCK_EX
+                );
+                
+                // Googleカレンダー連携でエラーが発生しても予約は成功とする
+            }
         }
         
         wp_send_json_success(__('予約が完了しました。', 'wp-simple-reservation'));
@@ -835,5 +902,155 @@ class WPSR_Admin {
         }
         
         wp_send_json_success($field);
+    }
+    
+    /**
+     * Googleカレンダー設定ページをレンダリング
+     */
+    public function render_google_calendar_page() {
+        // Googleカレンダーマネージャーを取得
+        global $wpsr_google_calendar;
+        if (!isset($wpsr_google_calendar)) {
+            require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-google-calendar.php';
+            $wpsr_google_calendar = new WPSR_Google_Calendar_Manager();
+        }
+        
+        $settings = $wpsr_google_calendar->get_settings();
+        
+        // 設定保存処理
+        if (isset($_POST['submit']) && wp_verify_nonce($_POST['wpsr_google_calendar_nonce'], 'wpsr_google_calendar_settings')) {
+            $save_result = $wpsr_google_calendar->save_settings($_POST['wpsr_google_calendar']);
+            if ($save_result === false) {
+                echo '<div class="notice notice-error"><p>' . __('設定の保存に失敗しました。JSONの形式を確認してください。', 'wp-simple-reservation') . '</p></div>';
+                
+                // デバッグ情報を表示（開発時のみ）
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    $json_content = isset($_POST['wpsr_google_calendar']['service_account']) ? $_POST['wpsr_google_calendar']['service_account'] : '';
+                    $json_error = json_last_error_msg();
+                    echo '<div class="notice notice-info"><p><strong>デバッグ情報:</strong></p>';
+                    echo '<p>JSONエラー: ' . esc_html($json_error) . '</p>';
+                    echo '<p>JSON先頭100文字: ' . esc_html(substr($json_content, 0, 100)) . '</p>';
+                    echo '</div>';
+                }
+            } else {
+                echo '<div class="notice notice-success"><p>' . __('設定が保存されました。', 'wp-simple-reservation') . '</p></div>';
+            }
+            $settings = $wpsr_google_calendar->get_settings();
+        }
+        
+        // 接続テスト処理
+        if (isset($_POST['test_connection']) && wp_verify_nonce($_POST['wpsr_google_calendar_nonce'], 'wpsr_google_calendar_settings')) {
+            $test_result = $wpsr_google_calendar->test_connection();
+            $message_class = $test_result['success'] ? 'notice-success' : 'notice-error';
+            echo '<div class="notice ' . $message_class . '"><p>' . esc_html($test_result['message']) . '</p></div>';
+            
+            // デバッグ情報を表示（開発時のみ）
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                echo '<div class="notice notice-info"><p><strong>デバッグ情報:</strong></p>';
+                echo '<pre>' . esc_html(print_r($test_result, true)) . '</pre></div>';
+            }
+        }
+        
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Googleカレンダー連携設定', 'wp-simple-reservation'); ?></h1>
+            
+            <form method="post" action="">
+                <?php wp_nonce_field('wpsr_google_calendar_settings', 'wpsr_google_calendar_nonce'); ?>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="wpsr_google_calendar_enabled"><?php _e('Googleカレンダー連携を有効にする', 'wp-simple-reservation'); ?></label>
+                        </th>
+                        <td>
+                            <input type="checkbox" id="wpsr_google_calendar_enabled" name="wpsr_google_calendar[enabled]" value="1" <?php checked($settings['enabled']); ?> />
+                            <p class="description"><?php _e('チェックすると、新規予約が自動的にGoogleカレンダーに反映されます。', 'wp-simple-reservation'); ?></p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="wpsr_google_calendar_service_account"><?php _e('サービスアカウントJSON', 'wp-simple-reservation'); ?></label>
+                        </th>
+                        <td>
+                            <textarea id="wpsr_google_calendar_service_account" name="wpsr_google_calendar[service_account_raw]" rows="10" cols="50" class="large-text code"><?php echo esc_textarea($settings['service_account']); ?></textarea>
+                            <input type="hidden" id="wpsr_google_calendar_service_account_encoded" name="wpsr_google_calendar[service_account]" value="">
+                            <p class="description">
+                                <?php _e('Google Cloud Consoleで作成したサービスアカウントのJSONキーを貼り付けてください。', 'wp-simple-reservation'); ?><br>
+                                <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>でサービスアカウントを作成し、Calendar APIを有効にしてください。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="wpsr_google_calendar_calendar_id"><?php _e('カレンダーID', 'wp-simple-reservation'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text" id="wpsr_google_calendar_calendar_id" name="wpsr_google_calendar[calendar_id]" value="<?php echo esc_attr($settings['calendar_id']); ?>" class="regular-text" />
+                            <p class="description">
+                                <?php _e('予約を反映するGoogleカレンダーのIDを入力してください。', 'wp-simple-reservation'); ?><br>
+                                <?php _e('例: example@gmail.com または example.com_abc123@group.calendar.google.com', 'wp-simple-reservation'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="wpsr_google_calendar_default_duration"><?php _e('デフォルト予約時間（時間）', 'wp-simple-reservation'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number" id="wpsr_google_calendar_default_duration" name="wpsr_google_calendar[default_duration]" value="<?php echo esc_attr($settings['default_duration']); ?>" min="1" max="24" class="small-text" />
+                            <p class="description"><?php _e('Googleカレンダーに作成されるイベントのデフォルト時間を設定します。', 'wp-simple-reservation'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <p class="submit">
+                    <input type="submit" name="submit" id="submit" class="button button-primary" value="<?php _e('設定を保存', 'wp-simple-reservation'); ?>" />
+                    <input type="submit" name="test_connection" id="test_connection" class="button button-secondary" value="<?php _e('接続テスト', 'wp-simple-reservation'); ?>" />
+                </p>
+            </form>
+            
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.querySelector('form');
+                const textarea = document.getElementById('wpsr_google_calendar_service_account');
+                const hiddenInput = document.getElementById('wpsr_google_calendar_service_account_encoded');
+                
+                form.addEventListener('submit', function(e) {
+                    // JSONをbase64エンコードしてhidden inputに設定
+                    const jsonContent = textarea.value;
+                    if (jsonContent.trim()) {
+                        try {
+                            // JSONの構文チェック
+                            JSON.parse(jsonContent);
+                            // base64エンコード
+                            const encoded = btoa(unescape(encodeURIComponent(jsonContent)));
+                            hiddenInput.value = encoded;
+                        } catch (error) {
+                            alert('JSONの形式が正しくありません。確認してください。');
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+                });
+            });
+            </script>
+            
+            <div class="card">
+                <h2><?php _e('セットアップ手順', 'wp-simple-reservation'); ?></h2>
+                <ol>
+                    <li><?php _e('Google Cloud Consoleでプロジェクトを作成', 'wp-simple-reservation'); ?></li>
+                    <li><?php _e('Calendar APIを有効化', 'wp-simple-reservation'); ?></li>
+                    <li><?php _e('サービスアカウントを作成', 'wp-simple-reservation'); ?></li>
+                    <li><?php _e('サービスアカウントキー（JSON）をダウンロード', 'wp-simple-reservation'); ?></li>
+                    <li><?php _e('Googleカレンダーでサービスアカウントに権限を付与', 'wp-simple-reservation'); ?></li>
+                    <li><?php _e('上記の設定を入力して保存', 'wp-simple-reservation'); ?></li>
+                </ol>
+            </div>
+        </div>
+        <?php
     }
 }
