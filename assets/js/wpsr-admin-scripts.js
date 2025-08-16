@@ -300,6 +300,20 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
                     const date = arg.date;
                     const dayOfWeek = date.getDay();
                     
+                    // PHPから渡された今日の日付を使用（タイムゾーン問題を解決）
+                    if (typeof wpsrToday !== 'undefined') {
+                        // JavaScriptの日付をローカルタイムゾーンでYYYY-MM-DD形式に変換
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const cellDateStr = `${year}-${month}-${day}`;
+                        
+                        if (cellDateStr === wpsrToday) {
+                            arg.el.classList.add('fc-day-today');
+                            console.log('Today cell found (PHP):', cellDateStr, 'PHP Today:', wpsrToday); // デバッグ用
+                        }
+                    }
+                    
                     // 土曜日
                     if (dayOfWeek === 6) {
                         arg.el.classList.add('fc-day-sat');
@@ -1038,6 +1052,13 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
         $('#wpsr-field-type').on('change', function() {
             const fieldType = $(this).val();
             toggleOptionsGroup(fieldType);
+            
+            // 性別フィールドの場合はプレースホルダーを無効化
+            if (fieldType === 'gender') {
+                $('#wpsr-field-placeholder').prop('disabled', true).val('');
+            } else {
+                $('#wpsr-field-placeholder').prop('disabled', false);
+            }
         });
         
         // フォーム送信
@@ -1319,6 +1340,23 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
                     toggleOptionsGroup(field.field_type);
                     console.log('toggleOptionsGroup completed'); // デバッグ用
                     
+                    // システム必須フィールドの説明文制御
+                    const isSystemRequired = field.field_key === 'name' || field.field_key === 'email';
+                    toggleSystemFieldDescriptions(isSystemRequired);
+                    
+                    // システム必須フィールドの場合は入力フィールドを無効化
+                    if (isSystemRequired) {
+                        $('#wpsr-field-key').prop('disabled', true);
+                        $('#wpsr-field-type').prop('disabled', true);
+                        $('#wpsr-field-required').prop('disabled', true);
+                        $('#wpsr-field-visible').prop('disabled', true);
+                    } else {
+                        $('#wpsr-field-key').prop('disabled', false);
+                        $('#wpsr-field-type').prop('disabled', false);
+                        $('#wpsr-field-required').prop('disabled', false);
+                        $('#wpsr-field-visible').prop('disabled', false);
+                    }
+                    
                     // モーダルを表示
                     console.log('Starting modal display process...'); // デバッグ用
                     console.log('Setting modal title to: フィールド編集'); // デバッグ用
@@ -1464,6 +1502,28 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
         $('#wpsr-field-form')[0].reset();
         $('#wpsr-field-id').val('');
         
+        // 新規追加時はフィールドキーを空にして、システム必須フィールドの判定を回避
+        if (mode === 'add') {
+            $('#wpsr-field-key').val('').prop('disabled', false);
+            $('#wpsr-field-type').prop('disabled', false);
+            $('#wpsr-field-required').prop('disabled', false);
+            $('#wpsr-field-visible').prop('disabled', false);
+            
+            // フィールドタイプに応じてデフォルト値を設定
+            if (fieldType) {
+                setDefaultFieldValues(fieldType);
+                // 性別フィールドの場合はプレースホルダーを無効化
+                if (fieldType === 'gender') {
+                    $('#wpsr-field-placeholder').prop('disabled', true).val('');
+                } else {
+                    $('#wpsr-field-placeholder').prop('disabled', false);
+                }
+            }
+            
+            // 新規追加時は説明文を非表示
+            toggleSystemFieldDescriptions(false);
+        }
+        
         if (fieldType) {
             $('#wpsr-field-type').val(fieldType);
             toggleOptionsGroup(fieldType);
@@ -1473,10 +1533,93 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
     }
     
     /**
+     * フィールドタイプに応じてデフォルト値を設定
+     */
+    function setDefaultFieldValues(fieldType) {
+        let fieldKey = '';
+        let label = '';
+        let placeholder = '';
+        
+        // フィールドキーをハイブリッド方式で生成
+        fieldKey = generateFieldKey(fieldType);
+        
+        switch (fieldType) {
+            case 'text':
+                label = '';
+                placeholder = '';
+                break;
+            case 'radio':
+                label = '';
+                placeholder = '';
+                break;
+            case 'select':
+                label = '';
+                placeholder = '';
+                break;
+            case 'checkbox':
+                label = '';
+                placeholder = '';
+                break;
+            case 'textarea':
+                label = '';
+                placeholder = '';
+                break;
+            case 'tel':
+                label = '電話番号';
+                placeholder = '03-0000-0000';
+                break;
+            case 'date':
+                label = '';
+                placeholder = '';
+                break;
+            case 'gender':
+                label = '性別';
+                placeholder = '';
+                break;
+            default:
+                label = '';
+                placeholder = '';
+        }
+        
+        $('#wpsr-field-key').val(fieldKey);
+        $('#wpsr-field-label').val(label);
+        $('#wpsr-field-placeholder').val(placeholder);
+    }
+    
+    /**
+     * フィールドキーをハイブリッド方式で生成
+     * 例: text-a7b3c9, radio-x2y8z1
+     */
+    function generateFieldKey(prefix) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = prefix + '-';
+        for (let i = 0; i < 6; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+    
+    /**
      * フィールドモーダルを非表示
      */
     function hideFieldModal() {
         $('#wpsr-field-modal').hide();
+    }
+    
+    /**
+     * システム必須フィールドの説明文の表示/非表示を制御
+     */
+    function toggleSystemFieldDescriptions(show) {
+        // 説明文の要素を取得
+        const descriptions = $('.wpsr-field-description');
+        
+        if (show) {
+            // 説明文を表示
+            descriptions.show();
+        } else {
+            // 説明文を非表示
+            descriptions.hide();
+        }
     }
     
     /**
@@ -1490,6 +1633,9 @@ var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin
         if (['select', 'radio', 'checkbox'].includes(fieldType)) {
             console.log('Showing options group'); // デバッグ用
             optionsGroup.show();
+        } else if (fieldType === 'gender') {
+            console.log('Hiding options group for gender field'); // デバッグ用
+            optionsGroup.hide();
         } else {
             console.log('Hiding options group'); // デバッグ用
             optionsGroup.hide();

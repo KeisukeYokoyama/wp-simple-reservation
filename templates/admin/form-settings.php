@@ -33,35 +33,16 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
         <button type="button" class="button button-secondary" id="wpsr-update-table">
             データベーステーブルを更新
         </button>
-        <span class="wpsr-help-text">フィールドを追加・削除した後にテーブルを更新する必要がある場合があります。</span>
+        <span class="wpsr-help-text">フィールドの追加・削除・編集を行った後は、データベーステーブルを更新して変更を反映してください。</span>
     </div>
     
     <div class="wpsr-admin-content">
         <div class="wpsr-form-settings-container">
-            
-            <!-- テンプレート項目セクション -->
-            <div class="wpsr-settings-section">
-                <h2>テンプレート項目</h2>
-                <p>よく使用される項目を簡単に追加できます。</p>
-                
-                <div class="wpsr-template-fields">
-                    <?php foreach ($template_fields as $key => $field): ?>
-                        <div class="wpsr-template-field">
-                            <span class="wpsr-field-label"><?php echo esc_html($field['label']); ?></span>
-                            <button type="button" class="button wpsr-add-template-field" 
-                                    data-field-key="<?php echo esc_attr($key); ?>"
-                                    data-field-data='<?php echo json_encode($field); ?>'>
-                                追加
-                            </button>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            
+
             <!-- 自由項目セクション -->
             <div class="wpsr-settings-section">
-                <h2>自由項目</h2>
-                <p>カスタムフィールドを追加できます。</p>
+                <h2>カスタムフィールド</h2>
+                <p>追加のフィールドをカスタマイズできます。</p>
                 
                 <div class="wpsr-custom-fields">
                     <?php foreach ($custom_field_types as $type => $label): ?>
@@ -121,16 +102,19 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
                                                 data-field-id="<?php echo esc_attr($field['id']); ?>">
                                             編集
                                         </button>
+                                        <?php if (!$form_manager->is_system_required_field($field['field_key'])): ?>
                                         <button type="button" class="button button-small wpsr-delete-field" 
                                                 data-field-id="<?php echo esc_attr($field['id']); ?>">
                                             削除
                                         </button>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 <?php endif; ?>
+                <p><small>メールアドレスと名前フィールドは予約システムの基本機能として必要で削除はできません</small></p>
             </div>
             
         </div>
@@ -149,51 +133,75 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
             
             <div class="wpsr-form-group">
                 <label for="wpsr-field-key">フィールドキー *</label>
-                <input type="text" id="wpsr-field-key" name="field_key" required>
+                <input type="text" id="wpsr-field-key" name="field_key" 
+                       value="<?php echo esc_attr($field['field_key'] ?? ''); ?>"
+                       <?php echo (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])) ? 'disabled' : ''; ?>
+                       required>
+                <?php if (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])): ?>
+                <p class="description wpsr-field-description">システム必須フィールドのため、フィールドキーは変更できません。</p>
+                <?php endif; ?>
             </div>
             
             <div class="wpsr-form-group">
                 <label for="wpsr-field-type">フィールドタイプ *</label>
-                <select id="wpsr-field-type" name="field_type" required>
-                    <option value="text">テキストボックス</option>
-                    <option value="email">メールアドレス</option>
-                    <option value="tel">電話番号</option>
-                    <option value="date">日付</option>
-                    <option value="textarea">テキストエリア</option>
-                    <option value="select">プルダウン</option>
-                    <option value="radio">ラジオボタン</option>
-                    <option value="checkbox">チェックボックス</option>
+                <select id="wpsr-field-type" name="field_type" 
+                        <?php echo (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])) ? 'disabled' : ''; ?>
+                        required>
+                    <option value="text" <?php echo (isset($field['field_type']) && $field['field_type'] === 'text') ? 'selected' : ''; ?>>テキストボックス</option>
+                    <option value="email" <?php echo (isset($field['field_type']) && $field['field_type'] === 'email') ? 'selected' : ''; ?>>メールアドレス</option>
+                    <option value="tel" <?php echo (isset($field['field_type']) && $field['field_type'] === 'tel') ? 'selected' : ''; ?>>電話番号</option>
+                    <option value="date" <?php echo (isset($field['field_type']) && $field['field_type'] === 'date') ? 'selected' : ''; ?>>日付</option>
+                    <option value="textarea" <?php echo (isset($field['field_type']) && $field['field_type'] === 'textarea') ? 'selected' : ''; ?>>テキストエリア</option>
+                    <option value="select" <?php echo (isset($field['field_type']) && $field['field_type'] === 'select') ? 'selected' : ''; ?>>プルダウン</option>
+                    <option value="radio" <?php echo (isset($field['field_type']) && $field['field_type'] === 'radio') ? 'selected' : ''; ?>>ラジオボタン</option>
+                    <option value="checkbox" <?php echo (isset($field['field_type']) && $field['field_type'] === 'checkbox') ? 'selected' : ''; ?>>チェックボックス</option>
+                    <option value="gender" <?php echo (isset($field['field_type']) && $field['field_type'] === 'gender') ? 'selected' : ''; ?>>性別</option>
                 </select>
+                <?php if (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])): ?>
+                <p class="description wpsr-field-description">システム必須フィールドのため、フィールドタイプは変更できません。</p>
+                <?php endif; ?>
             </div>
             
             <div class="wpsr-form-group">
                 <label for="wpsr-field-label">ラベル *</label>
-                <input type="text" id="wpsr-field-label" name="field_label" required>
+                <input type="text" id="wpsr-field-label" name="field_label" 
+                       value="<?php echo esc_attr($field['field_label'] ?? ''); ?>" required>
             </div>
             
             <div class="wpsr-form-group">
                 <label for="wpsr-field-placeholder">プレースホルダー</label>
-                <input type="text" id="wpsr-field-placeholder" name="field_placeholder">
+                <input type="text" id="wpsr-field-placeholder" name="field_placeholder" 
+                       value="<?php echo esc_attr($field['field_placeholder'] ?? ''); ?>">
             </div>
             
             <div class="wpsr-form-group" id="wpsr-field-options-group" style="display: none;">
                 <label for="wpsr-field-options">選択肢（1行に1つ）</label>
                 <textarea id="wpsr-field-options" name="field_options" rows="4" 
-                          placeholder="選択肢1&#10;選択肢2&#10;選択肢3"></textarea>
+                          placeholder="選択肢1&#10;選択肢2&#10;選択肢3"><?php echo esc_textarea($field['field_options'] ?? ''); ?></textarea>
             </div>
             
             <div class="wpsr-form-group">
                 <label>
-                    <input type="checkbox" id="wpsr-field-required" name="required" value="1">
+                    <input type="checkbox" id="wpsr-field-required" name="required" value="1"
+                           <?php echo (isset($field['required']) && $field['required']) ? 'checked' : ''; ?>
+                           <?php echo (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])) ? 'disabled' : ''; ?>>
                     必須項目にする
                 </label>
+                <?php if (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])): ?>
+                <p class="description wpsr-field-description">システム必須フィールドのため、必須設定は変更できません。</p>
+                <?php endif; ?>
             </div>
             
             <div class="wpsr-form-group">
                 <label>
-                    <input type="checkbox" id="wpsr-field-visible" name="visible" value="1" checked>
+                    <input type="checkbox" id="wpsr-field-visible" name="visible" value="1"
+                           <?php echo (!isset($field['visible']) || $field['visible']) ? 'checked' : ''; ?>
+                           <?php echo (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])) ? 'disabled' : ''; ?>>
                     表示する
                 </label>
+                <?php if (isset($field['field_key']) && !empty($field['field_key']) && $form_manager->is_system_required_field($field['field_key'])): ?>
+                <p class="description wpsr-field-description">システム必須フィールドのため、表示設定は変更できません。</p>
+                <?php endif; ?>
             </div>
             
             <div class="wpsr-modal-footer">
@@ -330,6 +338,82 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
     font-weight: bold;
 }
 
+/* デフォルトフィールドのスタイル */
+.wpsr-default-fields {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.wpsr-default-field {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.wpsr-default-field:last-child {
+    border-bottom: none;
+}
+
+.wpsr-default-field .wpsr-field-label {
+    font-weight: bold;
+    color: #333;
+    min-width: 150px;
+}
+
+.wpsr-default-field .wpsr-field-type {
+    color: #666;
+    min-width: 100px;
+}
+
+.wpsr-default-field .wpsr-field-status {
+    background: #007cba;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* カスタムフィールドのスタイル */
+.wpsr-custom-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.wpsr-custom-field {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    transition: all 0.2s;
+}
+
+.wpsr-custom-field:hover {
+    border-color: #007cba;
+    box-shadow: 0 2px 4px rgba(0, 124, 186, 0.1);
+}
+
+.wpsr-custom-field .wpsr-field-label {
+    font-weight: bold;
+    color: #333;
+    text-align: center;
+}
+
+.wpsr-custom-field .button {
+    width: 100%;
+}
+
 /* モーダルスタイル */
 .wpsr-modal {
     display: none;
@@ -385,10 +469,30 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
     margin-bottom: 15px;
 }
 
+/* チェックボックスのスタイル調整 */
+.wpsr-form-group input[type="checkbox"] {
+    width: auto !important;
+    margin-right: 8px !important;
+    vertical-align: middle !important;
+}
+
 .wpsr-form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
+    display: flex !important;
+    align-items: center !important;
+    font-weight: normal !important;
+    cursor: pointer !important;
+}
+
+.wpsr-form-group .description {
+    margin-top: 5px !important;
+    margin-left: 24px !important;
+    color: #666 !important;
+    font-style: italic !important;
+}
+
+/* システム必須フィールドの説明文はデフォルトで非表示 */
+.wpsr-field-description {
+    display: none;
 }
 
 .wpsr-form-group input,

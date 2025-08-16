@@ -172,6 +172,58 @@
     color: #2c3e50;
 }
 
+/* 性別フィールド */
+.wpsr-gender-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 8px;
+}
+
+.wpsr-gender-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 12px 20px;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    background: #fff;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.wpsr-gender-option:hover {
+    border-color: #3498db;
+    background: #f8f9fa;
+}
+
+.wpsr-gender-input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.wpsr-gender-text {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+/* 選択された性別オプションのスタイル */
+.wpsr-gender-option input[type="radio"]:checked + .wpsr-gender-text {
+    color: #fff;
+}
+
+.wpsr-gender-option input[type="radio"]:checked {
+    background: #3498db;
+    border-color: #3498db;
+    color: #fff;
+}
+
+.wpsr-gender-option input[type="radio"]:checked + .wpsr-gender-text {
+    color: #fff;
+}
+
 /* 日付グループ */
 .wpsr-date-group {
     display: flex;

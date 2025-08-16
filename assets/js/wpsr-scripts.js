@@ -31,6 +31,9 @@
         
         // 動的に生成されたフィールドのイベントハンドラーを設定
         setupDynamicFieldHandlers();
+        
+        // 性別フィールドの初期化
+        initGenderFields();
     }
     
     /**
@@ -634,6 +637,36 @@
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    }
+    
+    /**
+     * 性別フィールドの選択状態を管理
+     */
+    function initGenderFields() {
+        // 性別フィールドのラジオボタンにイベントリスナーを追加
+        $(document).on('change', '.wpsr-gender-input', function() {
+            const genderGroup = $(this).closest('.wpsr-gender-group');
+            if (genderGroup) {
+                // すべての性別オプションから選択状態をリセット
+                genderGroup.find('.wpsr-gender-option').removeClass('selected');
+                
+                // 選択されたオプションに選択状態を追加
+                $(this).closest('.wpsr-gender-option').addClass('selected');
+            }
+        });
+        
+        // 性別オプションのクリックイベント（フォールバック）
+        $(document).on('click', '.wpsr-gender-option', function(e) {
+            if (e.target.type !== 'radio') {
+                const radio = $(this).find('input[type="radio"]');
+                radio.prop('checked', true).trigger('change');
+            }
+        });
+        
+        // 初期状態の性別フィールドスタイルを設定
+        $('.wpsr-gender-input:checked').each(function() {
+            $(this).closest('.wpsr-gender-option').addClass('selected');
+        });
     }
     
 })(jQuery);

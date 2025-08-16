@@ -59,6 +59,20 @@ $confirm_button_text = get_option('wpsr_confirm_button_text', '予約を確定�
                         }
                     }
                     
+                    // 性別フィールドの場合は日本語に変換
+                    if ($field['field_type'] === 'gender') {
+                        switch ($field_value) {
+                            case 'male':
+                                $field_value = '男性';
+                                break;
+                            case 'female':
+                                $field_value = '女性';
+                                break;
+                            default:
+                                $field_value = $field_value; // そのまま表示
+                        }
+                    }
+                    
                     echo '<div class="wpsr-field-data">';
                     echo '<span class="wpsr-field-label">' . esc_html($field_label) . ':</span>';
                     echo '<span class="wpsr-field-value">' . esc_html($field_value) . '</span>';

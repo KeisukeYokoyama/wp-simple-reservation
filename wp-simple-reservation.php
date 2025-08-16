@@ -230,6 +230,7 @@ class WP_Simple_Reservation {
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             date date NOT NULL,
             time_slots text NOT NULL,
+            time_slots_with_stock text NOT NULL,
             is_available tinyint(1) DEFAULT 1,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -251,6 +252,7 @@ class WP_Simple_Reservation {
             sort_order int(11) DEFAULT 0,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            deleted_at datetime DEFAULT NULL,
             PRIMARY KEY (id),
             UNIQUE KEY field_key (field_key)
         ) $charset_collate;";
@@ -262,6 +264,9 @@ class WP_Simple_Reservation {
         
         // 既存テーブルにmessageカラムを追加（存在しない場合のみ）
         $this->update_tables();
+        
+        // デフォルトフィールドを初期化
+        $this->init_default_fields();
     }
     
     /**
@@ -271,8 +276,10 @@ class WP_Simple_Reservation {
         global $wpdb;
         
         $table_reservations = $wpdb->prefix . 'wpsr_reservations';
+        $table_form_fields = $wpdb->prefix . 'wpsr_form_fields';
+        $table_schedules = $wpdb->prefix . 'wpsr_schedules';
         
-        // 必要なカラムの定義
+        // 予約テーブルの必要なカラムの定義
         $required_columns = array(
             'message' => 'text AFTER status',
             'google_calendar_event_id' => 'varchar(255) AFTER message',
@@ -280,7 +287,11 @@ class WP_Simple_Reservation {
             'box_test' => 'varchar(255) AFTER birthdate',
             'text_area_test' => 'text AFTER box_test',
             'radio_test' => 'varchar(50) AFTER text_area_test',
-            'gender' => 'varchar(20) AFTER radio_test'
+            'gender' => 'varchar(20) AFTER radio_test',
+            'radio_test_2' => 'varchar(50) AFTER gender',
+            'radio_test_3' => 'varchar(50) AFTER radio_test_2',
+            'age' => 'varchar(20) AFTER radio_test_3',
+            'keiken' => 'varchar(50) AFTER age'
         );
         
         // 各カラムが存在するかチェックして、存在しない場合は追加
@@ -291,6 +302,71 @@ class WP_Simple_Reservation {
                 $wpdb->query("ALTER TABLE $table_reservations ADD COLUMN $column_name $column_definition");
                 error_log("WPSR: Added column $column_name to reservations table");
             }
+        }
+        
+        // フォームフィールドテーブルにdeleted_atカラムを追加（存在しない場合のみ）
+        $deleted_at_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_form_fields LIKE 'deleted_at'");
+        if (empty($deleted_at_exists)) {
+            $wpdb->query("ALTER TABLE $table_form_fields ADD COLUMN deleted_at datetime DEFAULT NULL AFTER updated_at");
+            error_log("WPSR: Added deleted_at column to form_fields table");
+        }
+        
+        // スケジュールテーブルにtime_slots_with_stockカラムを追加（存在しない場合のみ）
+        $time_slots_with_stock_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_schedules LIKE 'time_slots_with_stock'");
+        if (empty($time_slots_with_stock_exists)) {
+            $wpdb->query("ALTER TABLE $table_schedules ADD COLUMN time_slots_with_stock text NOT NULL AFTER time_slots");
+            error_log("WPSR: Added time_slots_with_stock column to schedules table");
+        }
+    }
+    
+    /**
+     * デフォルトフィールドを初期化
+     */
+    public function init_default_fields() {
+        global $wpdb;
+        
+        $table_form_fields = $wpdb->prefix . 'wpsr_form_fields';
+        
+        // 既存のフィールド数を確認
+        $existing_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_form_fields WHERE deleted_at IS NULL");
+        
+        if ($existing_count == 0) {
+            // デフォルトフィールドを挿入
+            $default_fields = array(
+                array(
+                    'field_key' => 'name',
+                    'field_type' => 'text',
+                    'field_label' => 'お名前',
+                    'field_placeholder' => '山田太郎',
+                    'field_options' => '',
+                    'required' => 1,
+                    'visible' => 1,
+                    'sort_order' => 1
+                ),
+                array(
+                    'field_key' => 'email',
+                    'field_type' => 'email',
+                    'field_label' => 'メールアドレス',
+                    'field_placeholder' => 'example@email.com',
+                    'field_options' => '',
+                    'required' => 1,
+                    'visible' => 1,
+                    'sort_order' => 2
+                )
+            );
+            
+            foreach ($default_fields as $field) {
+                $wpdb->insert(
+                    $table_form_fields,
+                    array_merge($field, array(
+                        'created_at' => current_time('mysql'),
+                        'updated_at' => current_time('mysql')
+                    )),
+                    array('%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s')
+                );
+            }
+            
+            error_log("WPSR: Initialized default form fields (name, email)");
         }
     }
     

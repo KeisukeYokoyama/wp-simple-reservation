@@ -63,7 +63,7 @@ if (!empty($where_values)) {
 
 <div class="wrap">
     <h1 class="wp-heading-inline">予約一覧</h1>
-    <a href="#" class="page-title-action wpsr-add-reservation">新規予約作成</a>
+    <a href="#" class="page-title-action wpsr-add-reservation">予約を追加</a>
     
     <!-- 検索フォーム -->
     <div class="wpsr-search-form">
@@ -72,26 +72,26 @@ if (!empty($where_values)) {
             
             <div class="wpsr-search-row">
                 <div class="wpsr-search-group">
-                    <label>予約日時:</label>
-                    <input type="date" name="schedule_date_from" value="<?php echo esc_attr($_GET['schedule_date_from'] ?? ''); ?>" placeholder="開始日">
-                    <span>〜</span>
-                    <input type="date" name="schedule_date_to" value="<?php echo esc_attr($_GET['schedule_date_to'] ?? ''); ?>" placeholder="終了日">
+                    <label>名前:</label>
+                    <input type="text" name="name_search" value="<?php echo esc_attr($_GET['name_search'] ?? ''); ?>" placeholder="名前を入力">
                 </div>
-                
-
                 
                 <div class="wpsr-search-group">
                     <label>メールアドレス:</label>
                     <input type="text" name="email_search" value="<?php echo esc_attr($_GET['email_search'] ?? ''); ?>" placeholder="メールアドレスを入力">
                 </div>
-                
-                <div class="wpsr-search-group">
-                    <label>名前:</label>
-                    <input type="text" name="name_search" value="<?php echo esc_attr($_GET['name_search'] ?? ''); ?>" placeholder="名前を入力">
-                </div>
             </div>
             
             <div class="wpsr-search-row">
+                <div class="wpsr-search-group wpsr-date-range">
+                    <label>予約日時:</label>
+                    <div class="wpsr-date-inputs">
+                        <input type="date" name="schedule_date_from" value="<?php echo esc_attr($_GET['schedule_date_from'] ?? ''); ?>" placeholder="開始日">
+                        <span class="wpsr-date-separator">〜</span>
+                        <input type="date" name="schedule_date_to" value="<?php echo esc_attr($_GET['schedule_date_to'] ?? ''); ?>" placeholder="終了日">
+                    </div>
+                </div>
+                
                 <div class="wpsr-search-group">
                     <label>ステータス:</label>
                     <div class="wpsr-checkbox-group">
@@ -314,44 +314,66 @@ if (!empty($where_values)) {
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 20px;
+    padding: 15px;
     margin: 20px 0;
 }
 
 .wpsr-search-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 20px;
+    gap: 20px;
+    margin-bottom: 15px;
 }
 
 .wpsr-search-group {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
     flex: 1;
-    min-width: 280px;
+    min-width: 250px;
+}
+
+.wpsr-search-group.wpsr-date-range {
+    flex: 0 0 auto;
+    min-width: 320px;
+    max-width: 400px;
 }
 
 .wpsr-search-group label {
     font-weight: bold;
-    min-width: 100px;
+    color: #333;
+    font-size: 14px;
     white-space: nowrap;
-    font-size: 13px;
 }
 
 .wpsr-search-group input[type="date"],
 .wpsr-search-group input[type="text"] {
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 14px;
-    flex: 1;
-    min-width: 120px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-.wpsr-search-group input[type="text"] {
-    min-width: 150px;
+.wpsr-date-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.wpsr-date-inputs input[type="date"] {
+    flex: 1;
+    min-width: 120px;
+    max-width: 150px;
+}
+
+.wpsr-date-separator {
+    color: #666;
+    font-weight: bold;
+    white-space: nowrap;
+    margin: 0 5px;
 }
 
 .wpsr-checkbox-group {
@@ -367,10 +389,11 @@ if (!empty($where_values)) {
     gap: 6px;
     cursor: pointer;
     font-weight: normal;
-    font-size: 13px;
-    padding: 4px 8px;
-    border-radius: 3px;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 4px;
     transition: background-color 0.2s;
+    white-space: nowrap;
 }
 
 .wpsr-checkbox:hover {
@@ -383,21 +406,53 @@ if (!empty($where_values)) {
     height: 16px;
 }
 
-.wpsr-checkbox span {
-    white-space: nowrap;
-}
-
 .wpsr-search-actions {
     text-align: right;
-    padding-top: 15px;
+    padding-top: 12px;
     border-top: 1px solid #eee;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .wpsr-search-actions .button {
     margin-left: 10px;
-    padding: 8px 16px;
+    padding: 6px 16px;
     font-size: 14px;
+    font-weight: 500;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .wpsr-search-group {
+        min-width: 100%;
+    }
+    
+    .wpsr-date-inputs {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .wpsr-date-inputs input[type="date"] {
+        min-width: auto;
+        max-width: none;
+    }
+    
+    .wpsr-checkbox-group {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .wpsr-search-actions {
+        text-align: center;
+    }
+    
+    .wpsr-search-actions .button {
+        margin: 5px;
+        width: 100%;
+        max-width: 200px;
+    }
 }
 
 .wpsr-search-results {
@@ -645,8 +700,8 @@ if (!empty($where_values)) {
     font-size: 14px;
     font-weight: 500;
     transition: background-color 0.2s;
-    float: right;
-    margin-top: 5px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .wpsr-add-reservation:hover {
@@ -1167,34 +1222,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // フォーム送信
-    document.getElementById('wpsr-reservation-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        var formData = new FormData(this);
-        formData.append('action', 'wpsr_update_reservation');
-        formData.append('nonce', '<?php echo wp_create_nonce('wpsr_nonce'); ?>');
-        
-        jQuery.ajax({
-            url: ajaxurl,
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    alert('予約を更新しました。');
-                    closeReservationModal();
-                    location.reload(); // ページを再読み込み
-                } else {
-                    alert('更新に失敗しました: ' + response.data);
-                }
-            },
-            error: function() {
-                alert('通信エラーが発生しました。');
-            }
-        });
-    });
+    // フォーム送信は wpsr-admin-scripts.js で処理されるため、ここでは不要
 
     // 新規予約作成フォームの送信
     document.getElementById('wpsr-add-reservation-form').addEventListener('submit', function(e) {

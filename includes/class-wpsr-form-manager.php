@@ -11,35 +11,26 @@ if (!defined('ABSPATH')) {
 class WPSR_Form_Manager {
     
     /**
-     * テンプレートフィールド定義
+     * デフォルトフィールド定義
      */
-    private $template_fields = array(
+    private $default_fields = array(
+        'name' => array(
+            'type' => 'text',
+            'label' => 'お名前',
+            'placeholder' => '山田太郎',
+            'required' => true,
+            'visible' => true,
+            'sort_order' => 1,
+            'system_required' => true
+        ),
         'email' => array(
             'type' => 'email',
             'label' => 'メールアドレス',
             'placeholder' => 'example@email.com',
-            'required' => true
-        ),
-        'phone' => array(
-            'type' => 'tel',
-            'label' => '電話番号',
-            'placeholder' => '090-1234-5678',
-            'required' => false
-        ),
-        'gender' => array(
-            'type' => 'radio',
-            'label' => '性別',
-            'options' => array(
-                'male' => '男性',
-                'female' => '女性',
-                'other' => 'その他'
-            ),
-            'required' => false
-        ),
-        'birthdate' => array(
-            'type' => 'date',
-            'label' => '生年月日',
-            'required' => false
+            'required' => true,
+            'visible' => true,
+            'sort_order' => 2,
+            'system_required' => true
         )
     );
     
@@ -51,45 +42,10 @@ class WPSR_Form_Manager {
         'radio' => 'ラジオボタン',
         'select' => 'プルダウン',
         'checkbox' => 'チェックボックス',
-        'textarea' => 'テキストエリア'
-    );
-    
-    /**
-     * デフォルトフィールド定義
-     */
-    private $default_fields = array(
-        'name' => array(
-            'type' => 'text',
-            'label' => 'お名前',
-            'placeholder' => '山田太郎',
-            'required' => true,
-            'visible' => true,
-            'sort_order' => 1
-        ),
-        'email' => array(
-            'type' => 'email',
-            'label' => 'メールアドレス',
-            'placeholder' => 'example@email.com',
-            'required' => true,
-            'visible' => true,
-            'sort_order' => 2
-        ),
-        'phone' => array(
-            'type' => 'tel',
-            'label' => '電話番号',
-            'placeholder' => '090-1234-5678',
-            'required' => false,
-            'visible' => true,
-            'sort_order' => 3
-        ),
-        'message' => array(
-            'type' => 'textarea',
-            'label' => 'メッセージ',
-            'placeholder' => 'ご要望があればお聞かせください',
-            'required' => false,
-            'visible' => true,
-            'sort_order' => 4
-        )
+        'textarea' => 'テキストエリア',
+        'tel' => '電話番号',
+        'date' => '日付',
+        'gender' => '性別'
     );
     
     /**
@@ -207,22 +163,52 @@ class WPSR_Form_Manager {
     }
     
     /**
-     * フィールドを論理削除
+     * フィールドを削除
      */
     public function delete_field($field_id) {
         global $wpdb;
         
-        $table_name = $wpdb->prefix . 'wpsr_form_fields';
+        // フィールド情報を取得
+        $field = $this->get_field($field_id);
+        if (!$field) {
+            return false;
+        }
+        
+        // システム必須フィールドは削除できない
+        if ($this->is_system_required_field($field['field_key'])) {
+            return false;
+        }
         
         $result = $wpdb->update(
-            $table_name,
+            $wpdb->prefix . 'wpsr_form_fields',
             array('deleted_at' => current_time('mysql')),
             array('id' => $field_id),
             array('%s'),
             array('%d')
         );
         
-        return $result !== false;
+        if ($result !== false) {
+            // 削除後の並び順を再調整
+            $this->reorder_fields_after_delete($field['sort_order']);
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * フィールド削除後の並び順を再調整
+     */
+    private function reorder_fields_after_delete($deleted_sort_order) {
+        global $wpdb;
+        
+        // 削除されたフィールドより後の並び順を1つ前にずらす
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}wpsr_form_fields 
+             SET sort_order = sort_order - 1 
+             WHERE sort_order > %d AND deleted_at IS NULL",
+            $deleted_sort_order
+        ));
     }
     
     /**
@@ -291,10 +277,11 @@ class WPSR_Form_Manager {
     }
     
     /**
-     * テンプレートフィールドを取得
+     * テンプレートフィールドを取得（廃止予定）
+     * @deprecated テンプレート機能は廃止されました
      */
     public function get_template_fields() {
-        return $this->template_fields;
+        return array();
     }
     
     /**
@@ -302,6 +289,22 @@ class WPSR_Form_Manager {
      */
     public function get_custom_field_types() {
         return $this->custom_field_types;
+    }
+    
+    /**
+     * デフォルトフィールドを取得
+     */
+    public function get_default_fields() {
+        return $this->default_fields;
+    }
+    
+    /**
+     * フィールドがシステム必須かチェック
+     */
+    public function is_system_required_field($field_key) {
+        return isset($this->default_fields[$field_key]) && 
+               isset($this->default_fields[$field_key]['system_required']) && 
+               $this->default_fields[$field_key]['system_required'];
     }
     
     /**
@@ -434,6 +437,32 @@ class WPSR_Form_Manager {
                         }
                     }
                 }
+                $html .= '</div>';
+                break;
+                
+            case 'gender':
+                $html .= '<div class="wpsr-gender-group">';
+                $html .= '<label class="wpsr-gender-option">';
+                $html .= '<input type="radio" ';
+                $html .= 'name="' . esc_attr($field['field_key']) . '" ';
+                $html .= 'value="male" ';
+                if ($field['required']) {
+                    $html .= 'required ';
+                }
+                $html .= 'class="wpsr-gender-input">';
+                $html .= '<span class="wpsr-gender-text">男性</span>';
+                $html .= '</label>';
+                
+                $html .= '<label class="wpsr-gender-option">';
+                $html .= '<input type="radio" ';
+                $html .= 'name="' . esc_attr($field['field_key']) . '" ';
+                $html .= 'value="female" ';
+                if ($field['required']) {
+                    $html .= 'required ';
+                }
+                $html .= 'class="wpsr-gender-input">';
+                $html .= '<span class="wpsr-gender-text">女性</span>';
+                $html .= '</label>';
                 $html .= '</div>';
                 break;
         }

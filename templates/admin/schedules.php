@@ -109,7 +109,7 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 
 <div class="wrap">
     <h1 class="wp-heading-inline">スケジュール管理</h1>
-    <a href="#" class="page-title-action" id="wpsr-add-schedule">新規追加</a>
+    <a href="#" class="page-title-action" id="wpsr-add-schedule">スケジュールを追加</a>
     
     <!-- タブナビゲーション -->
     <div class="wpsr-tabs">
@@ -146,7 +146,7 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                     <?php if (empty($schedules)): ?>
                         <div class="wpsr-no-schedules">
                             <p>まだスケジュールが登録されていません。</p>
-                            <p>「新規追加」ボタンからスケジュールを登録してください。</p>
+                            <p>「スケジュールを追加」ボタンからスケジュールを登録してください。</p>
                         </div>
                     <?php else: ?>
                         <table class="wp-list-table widefat fixed striped">
@@ -818,8 +818,15 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 }
 
 .fc-day-holiday {
-    background-color: #fff3e0 !important;
+    background-color: #ffebee !important;
 }
+
+.fc-day-today {
+    background-color: #fff3cd !important;
+    font-weight: bold !important;
+}
+
+
 
 /* カレンダーのサイズ調整 */
 .fc .fc-daygrid-day {
@@ -1012,3 +1019,8 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 </style>
 
 <!-- 管理画面用のJavaScriptは wpsr-admin-scripts.js で処理されます -->
+<script>
+// PHPから今日の日付を取得してJavaScriptに渡す
+var wpsrToday = '<?php echo date('Y-m-d'); ?>';
+console.log('PHP Today:', wpsrToday); // デバッグ用
+</script>
