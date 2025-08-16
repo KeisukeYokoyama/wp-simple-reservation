@@ -98,6 +98,10 @@ class WPSR_Form_Manager {
     public function __construct() {
         // 初期化時にデフォルトフィールドを設定
         add_action('init', array($this, 'init_default_fields'));
+        
+        // フィールド追加・削除時にテーブルを更新
+        add_action('wpsr_field_added', array($this, 'update_reservations_table'));
+        add_action('wpsr_field_deleted', array($this, 'update_reservations_table'));
     }
     
     /**
@@ -117,14 +121,14 @@ class WPSR_Form_Manager {
     }
     
     /**
-     * 全フィールドを取得
+     * 全フィールドを取得（論理削除されていないもの）
      */
     public function get_all_fields() {
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'wpsr_form_fields';
         $fields = $wpdb->get_results(
-            "SELECT * FROM $table_name ORDER BY sort_order ASC",
+            "SELECT * FROM $table_name WHERE deleted_at IS NULL ORDER BY sort_order ASC",
             ARRAY_A
         );
         
@@ -139,7 +143,7 @@ class WPSR_Form_Manager {
         
         $table_name = $wpdb->prefix . 'wpsr_form_fields';
         $fields = $wpdb->get_results(
-            "SELECT * FROM $table_name WHERE visible = 1 ORDER BY sort_order ASC",
+            "SELECT * FROM $table_name WHERE visible = 1 AND deleted_at IS NULL ORDER BY sort_order ASC",
             ARRAY_A
         );
         
@@ -203,9 +207,28 @@ class WPSR_Form_Manager {
     }
     
     /**
-     * フィールドを削除
+     * フィールドを論理削除
      */
     public function delete_field($field_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wpsr_form_fields';
+        
+        $result = $wpdb->update(
+            $table_name,
+            array('deleted_at' => current_time('mysql')),
+            array('id' => $field_id),
+            array('%s'),
+            array('%d')
+        );
+        
+        return $result !== false;
+    }
+    
+    /**
+     * フィールドを物理削除（完全削除）
+     */
+    public function hard_delete_field($field_id) {
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'wpsr_form_fields';
@@ -228,7 +251,39 @@ class WPSR_Form_Manager {
         $table_name = $wpdb->prefix . 'wpsr_form_fields';
         
         $field = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d AND deleted_at IS NULL", $field_id),
+            ARRAY_A
+        );
+        
+        return $field;
+    }
+    
+    /**
+     * 論理削除されたフィールドを含めて取得
+     */
+    public function get_field_including_deleted($field_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wpsr_form_fields';
+        
+        $field = $wpdb->get_row(
             $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $field_id),
+            ARRAY_A
+        );
+        
+        return $field;
+    }
+    
+    /**
+     * フィールドキーで論理削除されたフィールドを検索
+     */
+    public function get_deleted_field_by_key($field_key) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wpsr_form_fields';
+        
+        $field = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table_name WHERE field_key = %s AND deleted_at IS NOT NULL", $field_key),
             ARRAY_A
         );
         
@@ -480,5 +535,214 @@ class WPSR_Form_Manager {
         }
         
         return null;
+    }
+    
+    /**
+     * 予約テーブルを更新（フィールド追加・削除時）
+     */
+    public function update_reservations_table() {
+        global $wpdb;
+        
+        $reservations_table = $wpdb->prefix . 'wpsr_reservations';
+        $form_fields_table = $wpdb->prefix . 'wpsr_form_fields';
+        
+        // 現在のフィールド定義を取得（論理削除されていないもののみ）
+        $active_fields = $wpdb->get_results("SELECT field_key, field_type FROM $form_fields_table WHERE deleted_at IS NULL", ARRAY_A);
+        
+        // 論理削除されたフィールドも含めて全フィールドを取得（カラム削除の判断用）
+        $all_fields = $wpdb->get_results("SELECT field_key, field_type FROM $form_fields_table", ARRAY_A);
+        
+        // 現在のテーブル構造を取得
+        $table_structure = $wpdb->get_results("DESCRIBE $reservations_table", ARRAY_A);
+        $existing_columns = array_column($table_structure, 'Field');
+        
+        // 必要なカラムを追加（アクティブなフィールドのみ）
+        foreach ($active_fields as $field) {
+            $field_key = $field['field_key'];
+            $field_type = $field['field_type'];
+            
+            // 基本フィールドはスキップ
+            if (in_array($field_key, array('id', 'name', 'email', 'phone', 'schedule_date', 'schedule_time', 'status', 'created_at', 'updated_at', 'message', 'google_calendar_event_id'))) {
+                continue;
+            }
+            
+            // カラムが存在しない場合は追加
+            if (!in_array($field_key, $existing_columns)) {
+                $column_type = $this->get_column_type($field_type);
+                $sql = "ALTER TABLE $reservations_table ADD COLUMN `$field_key` $column_type";
+                
+                $result = $wpdb->query($sql);
+                if ($result !== false) {
+                    error_log("WPSR Debug - Added column: $field_key ($column_type)");
+                } else {
+                    error_log("WPSR Debug - Failed to add column: $field_key");
+                }
+            }
+        }
+        
+        // 不要なカラムを削除（フィールド定義に全く存在しないカラムのみ）
+        $all_field_keys = array_column($all_fields, 'field_key');
+        foreach ($existing_columns as $column) {
+            // 基本フィールドはスキップ
+            if (in_array($column, array('id', 'name', 'email', 'phone', 'schedule_date', 'schedule_time', 'status', 'created_at', 'updated_at', 'message', 'google_calendar_event_id'))) {
+                continue;
+            }
+            
+            // フィールド定義に全く存在しないカラムのみ削除（論理削除されたフィールドのカラムは保持）
+            if (!in_array($column, $all_field_keys)) {
+                $sql = "ALTER TABLE $reservations_table DROP COLUMN `$column`";
+                $result = $wpdb->query($sql);
+                if ($result !== false) {
+                    error_log("WPSR Debug - Dropped column: $column");
+                } else {
+                    error_log("WPSR Debug - Failed to drop column: $column");
+                }
+            }
+        }
+    }
+    
+    /**
+     * フィールドタイプに応じたカラムタイプを取得
+     */
+    private function get_column_type($field_type) {
+        switch ($field_type) {
+            case 'textarea':
+                return 'TEXT';
+            case 'date':
+                return 'DATE';
+            case 'email':
+            case 'tel':
+            case 'text':
+            case 'select':
+            case 'radio':
+            case 'checkbox':
+            default:
+                return 'VARCHAR(255)';
+        }
+    }
+    
+    /**
+     * フィールド追加時の型チェック
+     */
+    public function check_field_addition($field_key, $field_type, $field_data) {
+        // 論理削除されたフィールドをチェック
+        $deleted_field = $this->get_deleted_field_by_key($field_key);
+        
+        if ($deleted_field) {
+            if ($deleted_field['field_type'] === $field_type) {
+                // 同一型 → 復活
+                return $this->reactivate_field($deleted_field['id'], $field_data);
+            } else {
+                // 異なる型 → エラー
+                return array(
+                    'success' => false,
+                    'error' => sprintf(
+                        'フィールド「%s」は%s型で既に登録されています。同じフィールド名で異なる型を登録することはできません。',
+                        $field_key,
+                        $this->get_field_type_display_name($deleted_field['field_type'])
+                    )
+                );
+            }
+        }
+        
+        // 新規フィールドとして追加
+        return $this->add_new_field($field_key, $field_type, $field_data);
+    }
+    
+    /**
+     * 無効化されたフィールドを復活
+     */
+    private function reactivate_field($field_id, $new_data) {
+        global $wpdb;
+        
+        $update_data = array(
+            'deleted_at' => null,
+            'field_label' => $new_data['field_label'],
+            'field_placeholder' => $new_data['field_placeholder'],
+            'required' => $new_data['required'],
+            'visible' => $new_data['visible'],
+            'updated_at' => current_time('mysql')
+        );
+        
+        // 選択肢がある場合は更新
+        if (isset($new_data['field_options'])) {
+            $update_data['field_options'] = $new_data['field_options'];
+        }
+        
+        $result = $wpdb->update(
+            $wpdb->prefix . 'wpsr_form_fields',
+            $update_data,
+            array('id' => $field_id)
+        );
+        
+        if ($result !== false) {
+            return array(
+                'success' => true,
+                'action' => 'reactivated',
+                'field_id' => $field_id,
+                'message' => 'フィールドが復活しました。'
+            );
+        }
+        
+        return array(
+            'success' => false,
+            'error' => 'フィールドの復活に失敗しました。'
+        );
+    }
+    
+    /**
+     * 新規フィールドとして追加
+     */
+    private function add_new_field($field_key, $field_type, $field_data) {
+        global $wpdb;
+        
+        // 最大のsort_orderを取得
+        $max_sort = $wpdb->get_var("SELECT MAX(sort_order) FROM {$wpdb->prefix}wpsr_form_fields WHERE deleted_at IS NULL");
+        $sort_order = $max_sort ? $max_sort + 1 : 1;
+        
+        $data = array(
+            'field_key' => $field_key,
+            'field_type' => $field_type,
+            'field_label' => $field_data['field_label'],
+            'field_placeholder' => $field_data['field_placeholder'],
+            'field_options' => isset($field_data['field_options']) ? $field_data['field_options'] : '',
+            'required' => $field_data['required'],
+            'visible' => $field_data['visible'],
+            'sort_order' => $sort_order
+        );
+        
+        $result = $wpdb->insert($wpdb->prefix . 'wpsr_form_fields', $data);
+        
+        if ($result !== false) {
+            return array(
+                'success' => true,
+                'action' => 'added',
+                'field_id' => $wpdb->insert_id,
+                'message' => 'フィールドが追加されました。'
+            );
+        }
+        
+        return array(
+            'success' => false,
+            'error' => 'フィールドの追加に失敗しました。'
+        );
+    }
+    
+    /**
+     * フィールド型の表示名を取得
+     */
+    private function get_field_type_display_name($field_type) {
+        $type_names = array(
+            'text' => 'テキストボックス',
+            'email' => 'メールアドレス',
+            'tel' => '電話番号',
+            'date' => '日付',
+            'textarea' => 'テキストエリア',
+            'select' => 'プルダウン',
+            'radio' => 'ラジオボタン',
+            'checkbox' => 'チェックボックス'
+        );
+        
+        return isset($type_names[$field_type]) ? $type_names[$field_type] : $field_type;
     }
 }

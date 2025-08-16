@@ -12,9 +12,9 @@ global $wpdb;
 // 検索条件を取得
 $schedule_date_from = $_GET['schedule_date_from'] ?? '';
 $schedule_date_to = $_GET['schedule_date_to'] ?? '';
-$created_date_from = $_GET['created_date_from'] ?? '';
-$created_date_to = $_GET['created_date_to'] ?? '';
 $email_search = $_GET['email_search'] ?? '';
+$name_search = $_GET['name_search'] ?? '';
+$status_filter = $_GET['status'] ?? array();
 
 // WHERE句を構築
 $where_conditions = array();
@@ -30,19 +30,20 @@ if (!empty($schedule_date_to)) {
     $where_values[] = $schedule_date_to;
 }
 
-if (!empty($created_date_from)) {
-    $where_conditions[] = "DATE(created_at) >= %s";
-    $where_values[] = $created_date_from;
-}
-
-if (!empty($created_date_to)) {
-    $where_conditions[] = "DATE(created_at) <= %s";
-    $where_values[] = $created_date_to;
-}
-
 if (!empty($email_search)) {
     $where_conditions[] = "email LIKE %s";
     $where_values[] = '%' . $wpdb->esc_like($email_search) . '%';
+}
+
+if (!empty($name_search)) {
+    $where_conditions[] = "name LIKE %s";
+    $where_values[] = '%' . $wpdb->esc_like($name_search) . '%';
+}
+
+if (!empty($status_filter)) {
+    $status_placeholders = array_fill(0, count($status_filter), '%s');
+    $where_conditions[] = "status IN (" . implode(',', $status_placeholders) . ")";
+    $where_values = array_merge($where_values, $status_filter);
 }
 
 // SQLクエリを構築
@@ -62,6 +63,7 @@ if (!empty($where_values)) {
 
 <div class="wrap">
     <h1 class="wp-heading-inline">予約一覧</h1>
+    <a href="#" class="page-title-action wpsr-add-reservation">新規予約作成</a>
     
     <!-- 検索フォーム -->
     <div class="wpsr-search-form">
@@ -76,16 +78,36 @@ if (!empty($where_values)) {
                     <input type="date" name="schedule_date_to" value="<?php echo esc_attr($_GET['schedule_date_to'] ?? ''); ?>" placeholder="終了日">
                 </div>
                 
-                <div class="wpsr-search-group">
-                    <label>登録日時:</label>
-                    <input type="date" name="created_date_from" value="<?php echo esc_attr($_GET['created_date_from'] ?? ''); ?>" placeholder="開始日">
-                    <span>〜</span>
-                    <input type="date" name="created_date_to" value="<?php echo esc_attr($_GET['created_date_to'] ?? ''); ?>" placeholder="終了日">
-                </div>
+
                 
                 <div class="wpsr-search-group">
                     <label>メールアドレス:</label>
                     <input type="text" name="email_search" value="<?php echo esc_attr($_GET['email_search'] ?? ''); ?>" placeholder="メールアドレスを入力">
+                </div>
+                
+                <div class="wpsr-search-group">
+                    <label>名前:</label>
+                    <input type="text" name="name_search" value="<?php echo esc_attr($_GET['name_search'] ?? ''); ?>" placeholder="名前を入力">
+                </div>
+            </div>
+            
+            <div class="wpsr-search-row">
+                <div class="wpsr-search-group">
+                    <label>ステータス:</label>
+                    <div class="wpsr-checkbox-group">
+                        <label class="wpsr-checkbox">
+                            <input type="checkbox" name="status[]" value="pending" <?php echo in_array('pending', $_GET['status'] ?? []) ? 'checked' : ''; ?>>
+                            <span>保留中</span>
+                        </label>
+                        <label class="wpsr-checkbox">
+                            <input type="checkbox" name="status[]" value="confirmed" <?php echo in_array('confirmed', $_GET['status'] ?? []) ? 'checked' : ''; ?>>
+                            <span>確認済み</span>
+                        </label>
+                        <label class="wpsr-checkbox">
+                            <input type="checkbox" name="status[]" value="cancelled" <?php echo in_array('cancelled', $_GET['status'] ?? []) ? 'checked' : ''; ?>>
+                            <span>キャンセル</span>
+                        </label>
+                    </div>
                 </div>
             </div>
             
@@ -100,8 +122,7 @@ if (!empty($where_values)) {
         <?php 
         $total_count = count($reservations);
         $has_search = !empty($schedule_date_from) || !empty($schedule_date_to) || 
-                     !empty($created_date_from) || !empty($created_date_to) || 
-                     !empty($email_search);
+                     !empty($email_search) || !empty($name_search) || !empty($status_filter);
         ?>
         
         <?php if ($has_search): ?>
@@ -176,38 +197,47 @@ if (!empty($where_values)) {
         <form id="wpsr-reservation-form">
             <input type="hidden" id="wpsr-reservation-id" name="reservation_id" value="">
             
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-name">名前 *</label>
-                <input type="text" id="wpsr-reservation-name" name="name" required>
+            <!-- 基本情報セクション -->
+            <div class="wpsr-form-section">
+                <h3>予約状況</h3>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-reservation-date">予約日 *</label>
+                    <input type="date" id="wpsr-reservation-date" name="schedule_date" required readonly>
+                    <small class="wpsr-field-note">日付変更はできません</small>
+                </div>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-reservation-time">予約時間 *</label>
+                    <input type="time" id="wpsr-reservation-time" name="schedule_time" required readonly>
+                    <small class="wpsr-field-note">時間変更はできません</small>
+                </div>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-reservation-status">ステータス</label>
+                    <select id="wpsr-reservation-status" name="status">
+                        <option value="pending">保留中</option>
+                        <option value="confirmed">確認済み</option>
+                        <option value="cancelled">キャンセル</option>
+                    </select>
+                </div>
+                
+                <div class="wpsr-notice">
+                    <p><strong>⚠️ 注意事項</strong></p>
+                    <p>予約時間の変更は、他の予約との競合を避けるためこの画面では行えません。変更が必要な場合は、以下の手順で手動で対応してください。</p>
+                    <ol>
+                        <li>現在の予約を削除</li>
+                        <li>希望時間で新規予約を作成</li>
+                    </ol>
+                </div>
             </div>
             
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-email">メールアドレス *</label>
-                <input type="email" id="wpsr-reservation-email" name="email" required>
-            </div>
-            
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-phone">電話番号</label>
-                <input type="tel" id="wpsr-reservation-phone" name="phone">
-            </div>
-            
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-date">予約日 *</label>
-                <input type="date" id="wpsr-reservation-date" name="schedule_date" required>
-            </div>
-            
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-time">予約時間 *</label>
-                <input type="time" id="wpsr-reservation-time" name="schedule_time" required>
-            </div>
-            
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-status">ステータス</label>
-                <select id="wpsr-reservation-status" name="status">
-                    <option value="pending">保留中</option>
-                    <option value="confirmed">確認済み</option>
-                    <option value="cancelled">キャンセル</option>
-                </select>
+            <!-- 動的フィールドセクション -->
+            <div class="wpsr-form-section">
+                <h3>入力情報</h3>
+                <div id="wpsr-dynamic-fields">
+                    <!-- 動的にフィールドが生成されます -->
+                </div>
             </div>
             
             <div class="wpsr-form-group">
@@ -217,6 +247,61 @@ if (!empty($where_values)) {
             
             <div class="wpsr-modal-footer">
                 <button type="submit" class="button button-primary">保存</button>
+                <button type="button" class="button wpsr-modal-cancel">キャンセル</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 新規予約作成モーダル -->
+<div id="wpsr-add-reservation-modal" class="wpsr-modal" style="display: none;">
+    <div class="wpsr-modal-content">
+        <div class="wpsr-modal-header">
+            <h2>新規予約作成</h2>
+            <span class="wpsr-modal-close">&times;</span>
+        </div>
+        <form id="wpsr-add-reservation-form">
+            <!-- 基本情報セクション -->
+            <div class="wpsr-form-section">
+                <h3>予約状況</h3>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-add-reservation-date">予約日 *</label>
+                    <input type="date" id="wpsr-add-reservation-date" name="schedule_date" required>
+                </div>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-add-reservation-time">予約時間 *</label>
+                    <select id="wpsr-add-reservation-time" name="schedule_time" required>
+                        <option value="">時間を選択してください</option>
+                    </select>
+                </div>
+                
+                <div class="wpsr-form-group">
+                    <label for="wpsr-add-reservation-status">ステータス</label>
+                    <select id="wpsr-add-reservation-status" name="status">
+                        <option value="pending">保留中</option>
+                        <option value="confirmed">確認済み</option>
+                        <option value="cancelled">キャンセル</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- 動的フィールドセクション -->
+            <div class="wpsr-form-section">
+                <h3>入力情報</h3>
+                <div id="wpsr-add-dynamic-fields">
+                    <!-- 動的にフィールドが生成されます -->
+                </div>
+            </div>
+            
+            <div class="wpsr-form-group">
+                <label for="wpsr-add-reservation-message">メッセージ</label>
+                <textarea id="wpsr-add-reservation-message" name="message" rows="4"></textarea>
+            </div>
+            
+            <div class="wpsr-modal-footer">
+                <button type="submit" class="button button-primary">予約を作成</button>
                 <button type="button" class="button wpsr-modal-cancel">キャンセル</button>
             </div>
         </form>
@@ -236,8 +321,8 @@ if (!empty($where_values)) {
 .wpsr-search-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
-    margin-bottom: 15px;
+    gap: 15px;
+    margin-bottom: 20px;
 }
 
 .wpsr-search-group {
@@ -245,13 +330,14 @@ if (!empty($where_values)) {
     align-items: center;
     gap: 8px;
     flex: 1;
-    min-width: 300px;
+    min-width: 280px;
 }
 
 .wpsr-search-group label {
     font-weight: bold;
-    min-width: 120px;
+    min-width: 100px;
     white-space: nowrap;
+    font-size: 13px;
 }
 
 .wpsr-search-group input[type="date"],
@@ -260,21 +346,58 @@ if (!empty($where_values)) {
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 14px;
+    flex: 1;
+    min-width: 120px;
 }
 
 .wpsr-search-group input[type="text"] {
-    flex: 1;
-    min-width: 200px;
+    min-width: 150px;
+}
+
+.wpsr-checkbox-group {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.wpsr-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: normal;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.wpsr-checkbox:hover {
+    background-color: #f5f5f5;
+}
+
+.wpsr-checkbox input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.wpsr-checkbox span {
+    white-space: nowrap;
 }
 
 .wpsr-search-actions {
     text-align: right;
-    padding-top: 10px;
+    padding-top: 15px;
     border-top: 1px solid #eee;
+    margin-top: 10px;
 }
 
 .wpsr-search-actions .button {
     margin-left: 10px;
+    padding: 8px 16px;
+    font-size: 14px;
 }
 
 .wpsr-search-results {
@@ -344,17 +467,20 @@ if (!empty($where_values)) {
     width: 100%;
     height: 100%;
     background-color: rgba(0,0,0,0.5);
+    overflow-y: auto;
 }
 
 .wpsr-modal-content {
     background-color: #fefefe;
-    margin: 5% auto;
+    margin: 2% auto;
     padding: 0;
     border: 1px solid #888;
-    width: 80%;
+    width: 90%;
     max-width: 600px;
     border-radius: 5px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .wpsr-modal-header {
@@ -363,6 +489,10 @@ if (!empty($where_values)) {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .wpsr-modal-header h2 {
@@ -381,8 +511,11 @@ if (!empty($where_values)) {
     color: #000;
 }
 
-#wpsr-reservation-form {
+#wpsr-reservation-form,
+#wpsr-add-reservation-form {
     padding: 20px;
+    max-height: calc(90vh - 120px);
+    overflow-y: auto;
 }
 
 .wpsr-form-group {
@@ -410,6 +543,57 @@ if (!empty($where_values)) {
     min-height: 80px;
 }
 
+.wpsr-form-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    background-color: #fafafa;
+}
+
+.wpsr-form-section h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 2px solid #007cba;
+    padding-bottom: 10px;
+    font-size: 16px;
+}
+
+.wpsr-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wpsr-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    transition: background-color 0.2s;
+}
+
+.wpsr-radio-option:hover {
+    background-color: #f5f5f5;
+}
+
+.wpsr-radio-option input[type="radio"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.wpsr-radio-option label {
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+    flex: 1;
+}
+
 .wpsr-modal-footer {
     padding: 15px 20px;
     border-top: 1px solid #ddd;
@@ -418,6 +602,116 @@ if (!empty($where_values)) {
 
 .wpsr-modal-footer .button {
     margin-left: 10px;
+}
+
+.wpsr-notice {
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+    color: #856404;
+    font-size: 14px;
+}
+
+.wpsr-field-note {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 12px;
+}
+
+.wpsr-form-group input[readonly],
+.wpsr-form-group input[readonly]:focus {
+    background-color: #f5f5f5;
+    color: #666;
+    cursor: not-allowed;
+    border-color: #ddd;
+}
+
+.wpsr-form-group input[readonly] + .wpsr-field-note {
+    color: #999;
+    font-style: italic;
+}
+
+/* 新規予約作成ボタン */
+.wpsr-add-reservation {
+    margin-left: 10px;
+    padding: 8px 16px;
+    background: #007cba;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    float: right;
+    margin-top: 5px;
+}
+
+.wpsr-add-reservation:hover {
+    background: #005a87;
+    color: #fff;
+    text-decoration: none;
+}
+
+/* ヘッダー部分のレイアウト調整 */
+.wrap h1.wp-heading-inline {
+    display: inline-block;
+    margin-right: 0;
+}
+
+/* 新規予約作成モーダル */
+#wpsr-add-reservation-modal .wpsr-modal-content {
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#wpsr-add-reservation-modal .wpsr-form-section {
+    background-color: #f8f9fa;
+}
+
+/* モーダル内のスクロールバーのスタイリング */
+.wpsr-modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.wpsr-modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.wpsr-modal-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.wpsr-modal-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* フォーム内のスクロールバーのスタイリング */
+#wpsr-reservation-form::-webkit-scrollbar,
+#wpsr-add-reservation-form::-webkit-scrollbar {
+    width: 6px;
+}
+
+#wpsr-reservation-form::-webkit-scrollbar-track,
+#wpsr-add-reservation-form::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#wpsr-reservation-form::-webkit-scrollbar-thumb,
+#wpsr-add-reservation-form::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#wpsr-reservation-form::-webkit-scrollbar-thumb:hover,
+#wpsr-add-reservation-form::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 </style>
 
@@ -436,4 +730,502 @@ function get_status_label($status) {
     
     return isset($labels[$status]) ? $labels[$status] : $status;
 }
+
+// フィールド定義を取得
+$form_fields = $wpdb->get_results("
+    SELECT * FROM {$wpdb->prefix}wpsr_form_fields 
+    WHERE visible = 1 AND deleted_at IS NULL 
+    ORDER BY sort_order ASC
+");
+
+// フィールド定義をJSONとして出力
+$fields_json = json_encode($form_fields);
 ?>
+
+<script>
+// フィールド定義をグローバル変数として設定
+var wpsrFormFields = <?php echo $fields_json; ?>;
+
+// 動的フィールドを生成する関数
+function generateDynamicFields(reservationData) {
+    var container = document.getElementById('wpsr-dynamic-fields');
+    container.innerHTML = '';
+    
+    wpsrFormFields.forEach(function(field) {
+        var fieldDiv = document.createElement('div');
+        fieldDiv.className = 'wpsr-form-group';
+        
+        var label = document.createElement('label');
+        label.htmlFor = 'wpsr-reservation-' + field.field_key;
+        label.textContent = field.field_label;
+        if (field.required == 1) {
+            label.innerHTML += ' *';
+        }
+        
+        var input = createFormInput(field, reservationData);
+        
+        fieldDiv.appendChild(label);
+        fieldDiv.appendChild(input);
+        container.appendChild(fieldDiv);
+    });
+}
+
+// フィールドタイプに応じて適切な入力要素を作成
+function createFormInput(field, reservationData) {
+    var input;
+    var fieldValue = reservationData[field.field_key] || '';
+    
+    switch (field.field_type) {
+        case 'text':
+        case 'email':
+        case 'tel':
+        case 'date':
+            input = document.createElement('input');
+            input.type = field.field_type;
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.value = fieldValue;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            if (field.field_placeholder) {
+                input.placeholder = field.field_placeholder;
+            }
+            break;
+            
+        case 'textarea':
+            input = document.createElement('textarea');
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.rows = 4;
+            input.textContent = fieldValue;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            if (field.field_placeholder) {
+                input.placeholder = field.field_placeholder;
+            }
+            break;
+            
+        case 'radio':
+            input = document.createElement('div');
+            input.className = 'wpsr-radio-group';
+            
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                Object.keys(options).forEach(function(key) {
+                    var radioDiv = document.createElement('div');
+                    radioDiv.className = 'wpsr-radio-option';
+                    
+                    var radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.id = 'wpsr-reservation-' + field.field_key + '_' + key;
+                    radio.name = field.field_key;
+                    radio.value = key;
+                    radio.checked = (fieldValue === key);
+                    if (field.required == 1) {
+                        radio.required = true;
+                    }
+                    
+                    var radioLabel = document.createElement('label');
+                    radioLabel.htmlFor = 'wpsr-reservation-' + field.field_key + '_' + key;
+                    radioLabel.textContent = options[key];
+                    
+                    radioDiv.appendChild(radio);
+                    radioDiv.appendChild(radioLabel);
+                    input.appendChild(radioDiv);
+                });
+            } catch (e) {
+                console.error('Error parsing radio options:', e);
+            }
+            break;
+            
+        case 'select':
+            input = document.createElement('select');
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                Object.keys(options).forEach(function(key) {
+                    var option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = options[key];
+                    option.selected = (fieldValue === key);
+                    input.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Error parsing select options:', e);
+            }
+            break;
+            
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.value = fieldValue;
+            break;
+    }
+    
+    return input;
+}
+
+// 予約編集モーダルを開く
+function openReservationModal(reservationId) {
+    // 予約データを取得
+    jQuery.ajax({
+        url: ajaxurl,
+        type: 'POST',
+        data: {
+            action: 'wpsr_get_reservation',
+            reservation_id: reservationId,
+            nonce: '<?php echo wp_create_nonce('wpsr_nonce'); ?>'
+        },
+        success: function(response) {
+            if (response.success) {
+                var reservation = response.data;
+                
+                // 基本情報を設定
+                document.getElementById('wpsr-reservation-id').value = reservation.id;
+                document.getElementById('wpsr-reservation-date').value = reservation.schedule_date;
+                document.getElementById('wpsr-reservation-time').value = reservation.schedule_time;
+                document.getElementById('wpsr-reservation-status').value = reservation.status;
+                document.getElementById('wpsr-reservation-message').value = reservation.message || '';
+                
+                // 日付と時間フィールドを読み取り専用に設定
+                document.getElementById('wpsr-reservation-date').readOnly = true;
+                document.getElementById('wpsr-reservation-time').readOnly = true;
+                
+                // 動的フィールドを生成
+                generateDynamicFields(reservation);
+                
+                // モーダルを表示
+                document.getElementById('wpsr-reservation-modal').style.display = 'block';
+            } else {
+                alert('予約データの取得に失敗しました: ' + response.data);
+            }
+        },
+        error: function() {
+            alert('通信エラーが発生しました。');
+        }
+    });
+}
+
+// モーダルを閉じる
+function closeReservationModal() {
+    document.getElementById('wpsr-reservation-modal').style.display = 'none';
+}
+
+// 新規予約作成モーダルを開く
+function openAddReservationModal() {
+    // 動的フィールドを生成（空のデータで）
+    generateAddDynamicFields({});
+    
+    // モーダルを表示
+    document.getElementById('wpsr-add-reservation-modal').style.display = 'block';
+}
+
+// 新規作成用の動的フィールドを生成
+function generateAddDynamicFields(reservationData) {
+    var container = document.getElementById('wpsr-add-dynamic-fields');
+    container.innerHTML = '';
+    
+    wpsrFormFields.forEach(function(field) {
+        var fieldDiv = document.createElement('div');
+        fieldDiv.className = 'wpsr-form-group';
+        
+        var label = document.createElement('label');
+        label.htmlFor = 'wpsr-add-reservation-' + field.field_key;
+        label.textContent = field.field_label;
+        if (field.required == 1) {
+            label.innerHTML += ' *';
+        }
+        
+        var input = createAddFormInput(field, reservationData);
+        
+        fieldDiv.appendChild(label);
+        fieldDiv.appendChild(input);
+        container.appendChild(fieldDiv);
+    });
+}
+
+// 新規作成用のフィールドタイプに応じて適切な入力要素を作成
+function createAddFormInput(field, reservationData) {
+    var input;
+    var fieldValue = reservationData[field.field_key] || '';
+    
+    switch (field.field_type) {
+        case 'text':
+        case 'email':
+        case 'tel':
+        case 'date':
+            input = document.createElement('input');
+            input.type = field.field_type;
+            input.id = 'wpsr-add-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.value = fieldValue;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            if (field.field_placeholder) {
+                input.placeholder = field.field_placeholder;
+            }
+            break;
+            
+        case 'textarea':
+            input = document.createElement('textarea');
+            input.id = 'wpsr-add-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.rows = 4;
+            input.textContent = fieldValue;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            if (field.field_placeholder) {
+                input.placeholder = field.field_placeholder;
+            }
+            break;
+            
+        case 'radio':
+            input = document.createElement('div');
+            input.className = 'wpsr-radio-group';
+            
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                Object.keys(options).forEach(function(key) {
+                    var radioDiv = document.createElement('div');
+                    radioDiv.className = 'wpsr-radio-option';
+                    
+                    var radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.id = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                    radio.name = field.field_key;
+                    radio.value = key;
+                    radio.checked = (fieldValue === key);
+                    if (field.required == 1) {
+                        radio.required = true;
+                    }
+                    
+                    var radioLabel = document.createElement('label');
+                    radioLabel.htmlFor = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                    radioLabel.textContent = options[key];
+                    
+                    radioDiv.appendChild(radio);
+                    radioDiv.appendChild(radioLabel);
+                    input.appendChild(radioDiv);
+                });
+            } catch (e) {
+                console.error('Error parsing radio options:', e);
+            }
+            break;
+            
+        case 'select':
+            input = document.createElement('select');
+            input.id = 'wpsr-add-reservation-' + field.field_key;
+            input.name = field.field_key;
+            if (field.required == 1) {
+                input.required = true;
+            }
+            
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                Object.keys(options).forEach(function(key) {
+                    var option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = options[key];
+                    option.selected = (fieldValue === key);
+                    input.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Error parsing select options:', e);
+            }
+            break;
+            
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'wpsr-add-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.value = fieldValue;
+            break;
+    }
+    
+    return input;
+}
+
+// 新規予約作成モーダルを閉じる
+function closeAddReservationModal() {
+    document.getElementById('wpsr-add-reservation-modal').style.display = 'none';
+}
+
+// 日付変更時に利用可能時間を更新
+function updateAvailableTimes() {
+    var selectedDate = document.getElementById('wpsr-add-reservation-date').value;
+    var timeSelect = document.getElementById('wpsr-add-reservation-time');
+    
+    console.log('updateAvailableTimes called with date:', selectedDate);
+    
+    if (!selectedDate) {
+        timeSelect.innerHTML = '<option value="">時間を選択してください</option>';
+        return;
+    }
+    
+    // 利用可能時間を取得
+    jQuery.ajax({
+        url: ajaxurl,
+        type: 'POST',
+        data: {
+            action: 'wpsr_get_available_times_by_date',
+            date: selectedDate,
+            nonce: '<?php echo wp_create_nonce('wpsr_nonce'); ?>'
+        },
+        success: function(response) {
+            console.log('Ajax response:', response);
+            if (response.success) {
+                var schedules = response.data;
+                console.log('Schedules data:', schedules);
+                timeSelect.innerHTML = '<option value="">時間を選択してください</option>';
+                
+                if (schedules && schedules.length > 0) {
+                    schedules.forEach(function(schedule) {
+                        console.log('Processing schedule:', schedule);
+                        if (schedule.available_slots > 0) {
+                            var option = document.createElement('option');
+                            option.value = schedule.time_slot;
+                            option.textContent = schedule.time_slot + ' (残り' + schedule.available_slots + ')';
+                            timeSelect.appendChild(option);
+                        }
+                    });
+                } else {
+                    timeSelect.innerHTML = '<option value="">この日は予約可能な時間がありません</option>';
+                }
+            } else {
+                console.log('Ajax error:', response.data);
+                timeSelect.innerHTML = '<option value="">利用可能時間がありません</option>';
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Ajax error:', {xhr: xhr, status: status, error: error});
+            timeSelect.innerHTML = '<option value="">エラーが発生しました</option>';
+        }
+    });
+}
+
+// イベントリスナーを設定
+document.addEventListener('DOMContentLoaded', function() {
+    // 編集ボタンのクリックイベント
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('wpsr-edit-reservation')) {
+            e.preventDefault();
+            var reservationId = e.target.getAttribute('data-id');
+            openReservationModal(reservationId);
+        }
+    });
+    
+    // 新規予約作成ボタンのクリックイベント
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('wpsr-add-reservation')) {
+            e.preventDefault();
+            openAddReservationModal();
+        }
+    });
+
+    // モーダルを閉じる
+    document.querySelectorAll('.wpsr-modal-close').forEach(function(closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            var modal = this.closest('.wpsr-modal');
+            if (modal.id === 'wpsr-add-reservation-modal') {
+                closeAddReservationModal();
+            } else {
+                closeReservationModal();
+            }
+        });
+    });
+    
+    document.querySelectorAll('.wpsr-modal-cancel').forEach(function(cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            var modal = this.closest('.wpsr-modal');
+            if (modal.id === 'wpsr-add-reservation-modal') {
+                closeAddReservationModal();
+            } else {
+                closeReservationModal();
+            }
+        });
+    });
+    
+    // モーダル外クリックで閉じる
+    window.addEventListener('click', function(e) {
+        if (e.target.classList.contains('wpsr-modal')) {
+            closeReservationModal();
+        }
+        if (e.target.classList.contains('wpsr-add-reservation-modal')) {
+            closeAddReservationModal();
+        }
+    });
+    
+    // フォーム送信
+    document.getElementById('wpsr-reservation-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        formData.append('action', 'wpsr_update_reservation');
+        formData.append('nonce', '<?php echo wp_create_nonce('wpsr_nonce'); ?>');
+        
+        jQuery.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    alert('予約を更新しました。');
+                    closeReservationModal();
+                    location.reload(); // ページを再読み込み
+                } else {
+                    alert('更新に失敗しました: ' + response.data);
+                }
+            },
+            error: function() {
+                alert('通信エラーが発生しました。');
+            }
+        });
+    });
+
+    // 新規予約作成フォームの送信
+    document.getElementById('wpsr-add-reservation-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        formData.append('action', 'wpsr_create_reservation');
+        formData.append('nonce', '<?php echo wp_create_nonce('wpsr_nonce'); ?>');
+        
+        jQuery.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    alert('新規予約を作成しました。');
+                    closeAddReservationModal();
+                    location.reload(); // ページを再読み込み
+                } else {
+                    alert('予約作成に失敗しました: ' + response.data);
+                }
+            },
+            error: function() {
+                alert('通信エラーが発生しました。');
+            }
+        });
+    });
+
+    // 日付変更時に利用可能時間を更新
+    document.getElementById('wpsr-add-reservation-date').addEventListener('change', updateAvailableTimes);
+});
+</script>

@@ -21,6 +21,11 @@ $wp_today = current_time('Y-m-d');
 // デバッグ用：日付情報を表示
 echo '<!-- Debug: PHP date() = ' . $today . ' -->';
 echo '<!-- Debug: WordPress current_time() = ' . $wp_today . ' -->';
+echo '<!-- Debug: PHP timezone = ' . date_default_timezone_get() . ' -->';
+echo '<!-- Debug: WordPress timezone = ' . get_option('timezone_string') . ' -->';
+echo '<!-- Debug: WordPress gmt_offset = ' . get_option('gmt_offset') . ' -->';
+echo '<!-- Debug: Current timestamp = ' . time() . ' -->';
+echo '<!-- Debug: WordPress timestamp = ' . current_time('timestamp') . ' -->';
 
 // スケジュール一覧を取得（本日以降のスケジュールのみ、日付順）
 $schedules = $wpdb->get_results($wpdb->prepare("
@@ -32,6 +37,55 @@ $schedules = $wpdb->get_results($wpdb->prepare("
 // デバッグ用：SQLクエリと結果を表示
 echo '<!-- Debug: SQL = SELECT * FROM ' . $wpdb->prefix . 'wpsr_schedules WHERE date >= ' . $today . ' -->';
 echo '<!-- Debug: Found ' . count($schedules) . ' schedules -->';
+
+// 表示設定の保存処理
+if (isset($_POST['wpsr_save_display_settings'])) {
+    if (wp_verify_nonce($_POST['wpsr_display_nonce'], 'wpsr_display_settings')) {
+        // 基本設定項目を保存
+        update_option('wpsr_personal_info_title', wp_kses_post($_POST['personal_info_title']));
+        update_option('wpsr_booking_title', wp_kses_post($_POST['booking_title']));
+        update_option('wpsr_booking_description', wp_kses_post($_POST['booking_description']));
+        update_option('wpsr_submit_button_text', sanitize_text_field($_POST['submit_button_text']));
+        
+        // 確認画面設定項目を保存
+        update_option('wpsr_confirm_page_url', esc_url_raw($_POST['confirm_page_url']));
+        update_option('wpsr_confirm_title', sanitize_text_field($_POST['confirm_title']));
+        update_option('wpsr_confirm_button_text', sanitize_text_field($_POST['confirm_button_text']));
+        
+        // 完了画面設定項目を保存
+        update_option('wpsr_complete_page_url', esc_url_raw($_POST['complete_page_url']));
+        update_option('wpsr_complete_title', sanitize_text_field($_POST['complete_title']));
+        update_option('wpsr_complete_message', wp_kses_post($_POST['complete_message']));
+        update_option('wpsr_next_action', wp_kses_post($_POST['next_action']));
+        update_option('wpsr_error_title', sanitize_text_field($_POST['error_title']));
+        update_option('wpsr_error_message', wp_kses_post($_POST['error_message']));
+        
+        // 詳細設定項目を保存
+        update_option('wpsr_notice_text', wp_kses_post($_POST['notice_text']));
+        update_option('wpsr_info_section_content', wp_kses_post($_POST['info_section_content']));
+        
+        echo '<div class="notice notice-success"><p>表示設定が保存されました。</p></div>';
+    } else {
+        echo '<div class="notice notice-error"><p>セキュリティチェックに失敗しました。</p></div>';
+    }
+}
+
+// 表示期間設定の保存処理
+if (isset($_POST['wpsr_save_display_period'])) {
+    if (wp_verify_nonce($_POST['wpsr_display_period_nonce'], 'wpsr_display_period')) {
+        $display_days = intval($_POST['display_days']);
+        
+        // 値の検証
+        if ($display_days >= 1 && $display_days <= 365) {
+            update_option('wpsr_display_days', $display_days);
+            echo '<div class="notice notice-success"><p>表示期間設定が保存されました。</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>入力値が正しくありません。1-365の範囲で入力してください。</p></div>';
+        }
+    } else {
+        echo '<div class="notice notice-error"><p>セキュリティチェックに失敗しました。</p></div>';
+    }
+}
 
 // 予約締切日設定の保存処理
 if (isset($_POST['wpsr_save_deadline_settings'])) {
@@ -66,6 +120,10 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
         <button class="wpsr-tab-button" data-tab="archive">
             <span class="dashicons dashicons-archive"></span>
             アーカイブ
+        </button>
+        <button class="wpsr-tab-button" data-tab="display">
+            <span class="dashicons dashicons-admin-appearance"></span>
+            表示設定
         </button>
         <button class="wpsr-tab-button" data-tab="settings">
             <span class="dashicons dashicons-admin-settings"></span>
@@ -109,10 +167,21 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                                         <td><?php echo esc_html($schedule->date); ?></td>
                                         <td>
                                             <?php 
-                                            $time_slots = json_decode($schedule->time_slots, true);
+                                            $time_slots = json_decode($schedule->time_slots_with_stock, true);
                                             if ($time_slots) {
                                                 foreach ($time_slots as $slot) {
-                                                    echo '<span class="wpsr-time-slot-badge">' . esc_html($slot['time']) . '</span>';
+                                                    $stock_info = '';
+                                                    $css_class = 'wpsr-time-slot-badge';
+                                                    
+                                                    if (isset($slot['max_stock']) && isset($slot['current_stock'])) {
+                                                        if ($slot['current_stock'] <= 0) {
+                                                            $stock_info = '（満席）';
+                                                            $css_class .= ' wpsr-time-slot-full';
+                                                        } else {
+                                                            $stock_info = '（残り' . $slot['current_stock'] . '）';
+                                                        }
+                                                    }
+                                                    echo '<span class="' . $css_class . '">' . esc_html($slot['time']) . $stock_info . '</span>';
                                                 }
                                             }
                                             ?>
@@ -177,10 +246,21 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                                 <td><?php echo esc_html($schedule->date); ?></td>
                                 <td>
                                     <?php 
-                                    $time_slots = json_decode($schedule->time_slots, true);
+                                    $time_slots = json_decode($schedule->time_slots_with_stock, true);
                                     if ($time_slots) {
                                         foreach ($time_slots as $slot) {
-                                            echo '<span class="wpsr-time-slot-badge wpsr-past-time-slot">' . esc_html($slot['time']) . '</span>';
+                                            $stock_info = '';
+                                            $css_class = 'wpsr-time-slot-badge wpsr-past-time-slot';
+                                            
+                                            if (isset($slot['max_stock']) && isset($slot['current_stock'])) {
+                                                if ($slot['current_stock'] <= 0) {
+                                                    $stock_info = '（満席）';
+                                                    $css_class .= ' wpsr-time-slot-full';
+                                                } else {
+                                                    $stock_info = '（残り' . $slot['current_stock'] . '）';
+                                                }
+                                            }
+                                            echo '<span class="' . $css_class . '">' . esc_html($slot['time']) . $stock_info . '</span>';
                                         }
                                     }
                                     ?>
@@ -208,8 +288,298 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
             <?php endif; ?>
         </div>
         
+        <!-- 表示設定タブ -->
+        <div class="wpsr-tab-content" id="display-settings">
+            <h3>フロントエンド表示設定</h3>
+            <p>フロントエンドの予約フォームの表示に関する設定を行います。</p>
+            
+            <form method="post" action="" id="wpsr-display-settings-form">
+                <?php wp_nonce_field('wpsr_display_settings', 'wpsr_display_nonce'); ?>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="personal_info_title">個人情報入力セクションタイトル</label>
+                        </th>
+                        <td>
+                            <input type="text" id="personal_info_title" name="personal_info_title" 
+                                   value="<?php echo esc_attr(get_option('wpsr_personal_info_title', '個人情報入力')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                個人情報入力セクションのタイトルを設定します。<br>
+                                HTMLタグも使用可能です（例：&lt;h3&gt;個人情報入力&lt;/h3&gt;）
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="booking_title">面談予約セクションタイトル</label>
+                        </th>
+                        <td>
+                            <input type="text" id="booking_title" name="booking_title" 
+                                   value="<?php echo esc_attr(get_option('wpsr_booking_title', '面談予約')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                面談予約セクションのタイトルを設定します。<br>
+                                HTMLタグも使用可能です（例：&lt;h3&gt;面談予約&lt;/h3&gt;）
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="booking_description">面談予約セクション説明文</label>
+                        </th>
+                        <td>
+                            <textarea id="booking_description" name="booking_description" rows="3" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_booking_description', '面談を行える日時を教えて下さい')); ?></textarea>
+                            <p class="description">
+                                面談予約セクションの説明文を設定します。<br>
+                                HTMLタグも使用可能です。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="submit_button_text">送信ボタンテキスト</label>
+                        </th>
+                        <td>
+                            <input type="text" id="submit_button_text" name="submit_button_text" 
+                                   value="<?php echo esc_attr(get_option('wpsr_submit_button_text', 'ご入力内容の確認')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                送信ボタンに表示するテキストを設定します。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h3>確認画面設定</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="confirm_page_url">確認画面のURL</label>
+                        </th>
+                        <td>
+                            <input type="url" id="confirm_page_url" name="confirm_page_url" 
+                                   value="<?php echo esc_attr(get_option('wpsr_confirm_page_url', home_url('/booking/confirm/'))); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                確認画面の固定ページのURLを設定します。<br>
+                                例：<?php echo home_url('/booking/confirm/'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="confirm_title">確認画面タイトル</label>
+                        </th>
+                        <td>
+                            <input type="text" id="confirm_title" name="confirm_title" 
+                                   value="<?php echo esc_attr(get_option('wpsr_confirm_title', '予約内容の確認')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                確認画面のタイトルを設定します。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="confirm_button_text">確定ボタンテキスト</label>
+                        </th>
+                        <td>
+                            <input type="text" id="confirm_button_text" name="confirm_button_text" 
+                                   value="<?php echo esc_attr(get_option('wpsr_confirm_button_text', '予約を確定する')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                確認画面の確定ボタンに表示するテキストを設定します。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h3>完了画面設定</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="complete_page_url">完了画面のURL</label>
+                        </th>
+                        <td>
+                            <input type="url" id="complete_page_url" name="complete_page_url" 
+                                   value="<?php echo esc_attr(get_option('wpsr_complete_page_url', home_url('/booking/complete/'))); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                完了画面の固定ページのURLを設定します。<br>
+                                例：<?php echo home_url('/booking/complete/'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="complete_title">完了画面タイトル</label>
+                        </th>
+                        <td>
+                            <input type="text" id="complete_title" name="complete_title" 
+                                   value="<?php echo esc_attr(get_option('wpsr_complete_title', '予約が完了しました')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                完了画面のタイトルを設定します。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="complete_message">完了メッセージ</label>
+                        </th>
+                        <td>
+                            <textarea id="complete_message" name="complete_message" rows="4" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_complete_message', 'ご予約ありがとうございます。ご入力いただいたメールアドレスに確認メールをお送りしました。')); ?></textarea>
+                            <p class="description">
+                                完了画面に表示するメッセージを設定します。<br>
+                                HTMLタグも使用可能です。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="next_action">次のアクション案内</label>
+                        </th>
+                        <td>
+                            <textarea id="next_action" name="next_action" rows="4" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_next_action', '')); ?></textarea>
+                            <p class="description">
+                                完了画面に表示する次のアクション案内を設定します。<br>
+                                HTMLタグも使用可能です（例：&lt;a href="/contact/"&gt;お問い合わせ&lt;/a&gt;）
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="error_title">エラー画面タイトル</label>
+                        </th>
+                        <td>
+                            <input type="text" id="error_title" name="error_title" 
+                                   value="<?php echo esc_attr(get_option('wpsr_error_title', 'エラーが発生しました')); ?>" 
+                                   class="regular-text">
+                            <p class="description">
+                                エラー画面のタイトルを設定します。
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="error_message">エラーメッセージ</label>
+                        </th>
+                        <td>
+                            <textarea id="error_message" name="error_message" rows="4" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_error_message', '予約の処理中にエラーが発生しました。もう一度お試しください。')); ?></textarea>
+                            <p class="description">
+                                エラー画面に表示するメッセージを設定します。<br>
+                                HTMLタグも使用可能です。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h3>詳細設定（HTMLエディタ）</h3>
+                <p>デザインとレイアウトを完全にカスタマイズできます。HTMLとCSSを自由に使用してください。</p>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="notice_text">注意事項テキスト</label>
+                        </th>
+                        <td>
+                            <textarea id="notice_text" name="notice_text" rows="4" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_notice_text', '※仮予約ではなく、選択したお時間で予約完了となりますので、確実にご参加いただける日程をご選択ください。')); ?></textarea>
+                            <p class="description">
+                                面談予約セクションの注意事項を設定します。<br>
+                                デフォルトのスタイルは削除されているため、完全にカスタマイズ可能です。<br>
+                                空白の場合は、このセクション全体が非表示になります。<br>
+                                例：&lt;div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px;"&gt;&lt;span style="color: #ff0000; font-weight: bold;"&gt;※重要&lt;/span&gt;：内容&lt;/div&gt;
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="info_section_content">確認・補足情報セクション</label>
+                        </th>
+                        <td>
+                            <textarea id="info_section_content" name="info_section_content" rows="8" cols="50" class="large-text"><?php echo esc_textarea(get_option('wpsr_info_section_content', '無料面談は入会のためのステップではなく、あなたの結婚の悩みを解消する場です。まずはお気軽にお問い合わせください。')); ?></textarea>
+                            <p class="description">
+                                予約ボタンの前に表示される確認・補足情報を設定します。<br>
+                                デフォルトのスタイルは削除されているため、完全にカスタマイズ可能です。<br>
+                                空白の場合は、このセクション全体が非表示になります。<br>
+                                例：&lt;div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 20px; border-radius: 8px;"&gt;&lt;p style="color: #155724; margin: 0;"&gt;&lt;strong&gt;重要&lt;/strong&gt;：内容&lt;/p&gt;&lt;/div&gt;
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <p class="submit">
+                    <input type="submit" name="wpsr_save_display_settings" class="button-primary" value="表示設定を保存">
+                </p>
+            </form>
+            
+            <hr>
+            
+            <h3>フォーム表示設定例</h3>
+            <div class="wpsr-setting-examples">
+                <div class="wpsr-example">
+                    <h4>基本設定の例</h4>
+                    <p><strong>個人情報入力</strong>：お客様情報</p>
+                    <p><strong>面談予約</strong>：ご希望日時</p>
+                    <p><strong>送信ボタン</strong>：予約内容を確認する</p>
+                    <p class="description">シンプルなテキストで設定できます。</p>
+                </div>
+                
+                <div class="wpsr-example">
+                    <h4>HTMLエディタの設定例</h4>
+                    <p><strong>注意事項</strong>：&lt;span style="color: #ff0000; font-weight: bold;"&gt;※重要&lt;/span&gt;：ご都合の良い日時をお選びください</p>
+                    <p><strong>補足情報</strong>：&lt;div style="background: #f0f8ff; padding: 15px; border-radius: 5px;"&gt;&lt;p&gt;無料面談は&lt;strong&gt;入会のためのステップ&lt;/strong&gt;ではなく...&lt;/p&gt;&lt;/div&gt;</p>
+                    <p class="description">HTMLタグとCSSスタイルを使用して完全にカスタマイズ可能です。</p>
+                </div>
+            </div>
+        </div>
+        
         <!-- 設定タブ -->
         <div class="wpsr-tab-content" id="schedule-settings">
+            <h3>表示期間設定</h3>
+            <p>フロントエンドで表示する予約可能な期間を設定できます。</p>
+            
+            <form method="post" action="" id="wpsr-display-period-form">
+                <?php wp_nonce_field('wpsr_display_period', 'wpsr_display_period_nonce'); ?>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="display_days">表示期間</label>
+                        </th>
+                        <td>
+                            <input type="number" id="display_days" name="display_days" 
+                                   value="<?php echo esc_attr(get_option('wpsr_display_days', 7)); ?>" 
+                                   min="1" max="365" class="small-text">
+                            <span>日先まで</span>
+                            <p class="description">
+                                フロントエンドで表示する予約可能な日数です。<br>
+                                例：7と入力すると、今日から7日後まで予約可能な日が表示されます。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <p class="submit">
+                    <input type="submit" name="wpsr_save_display_period" class="button-primary" value="表示期間設定を保存">
+                </p>
+            </form>
+            
+            <hr>
+            
             <h3>予約締切日設定</h3>
             <p>予約を受け付ける期限を設定できます。設定した期限を過ぎた日時は予約できなくなります。</p>
             
@@ -251,7 +621,7 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                 </table>
                 
                 <p class="submit">
-                    <input type="submit" name="wpsr_save_deadline_settings" class="button-primary" value="設定を保存">
+                    <input type="submit" name="wpsr_save_deadline_settings" class="button-primary" value="予約締切日設定を保存">
                 </p>
             </form>
             
@@ -260,24 +630,19 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
             <h3>設定例</h3>
             <div class="wpsr-setting-examples">
                 <div class="wpsr-example">
-                    <h4>当日予約不可の場合</h4>
-                    <p>予約締切日：<strong>1日前まで</strong><br>
-                    予約締切時間：<strong>0時間前まで</strong></p>
-                    <p class="description">前日までに予約を完了する必要があります。</p>
+                    <h4>表示期間の設定例</h4>
+                    <p><strong>1週間先まで表示</strong>：7日先まで</p>
+                    <p><strong>1ヶ月先まで表示</strong>：30日先まで</p>
+                    <p><strong>3ヶ月先まで表示</strong>：90日先まで</p>
+                    <p class="description">今日から設定した日数後まで予約可能な日が表示されます。</p>
                 </div>
                 
                 <div class="wpsr-example">
-                    <h4>時間を指定する場合</h4>
-                    <p>予約締切日：<strong>0日前まで</strong><br>
-                    予約締切時間：<strong>2時間前まで</strong></p>
-                    <p class="description">当日でも予約時間の2時間前まで予約できます。</p>
-                </div>
-                
-                <div class="wpsr-example">
-                    <h4>直前予約も可能の場合</h4>
-                    <p>予約締切日：<strong>0日前まで</strong><br>
-                    予約締切時間：<strong>0時間前まで</strong></p>
-                    <p class="description">予約時間直前まで予約を受け付けます。</p>
+                    <h4>予約締切日の設定例</h4>
+                    <p><strong>当日予約不可</strong>：1日前まで</p>
+                    <p><strong>時間指定</strong>：2時間前まで</p>
+                    <p><strong>直前予約可能</strong>：0時間前まで</p>
+                    <p class="description">予約を受け付ける期限を設定できます。</p>
                 </div>
             </div>
         </div>
@@ -305,6 +670,8 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                     <div id="wpsr-time-slots-container">
                         <div class="wpsr-time-slot-input">
                             <input type="time" name="time_slots[]" required>
+                            <label style="margin-left: 10px; font-size: 12px; color: #666;">予約可能数:</label>
+                            <input type="number" name="max_stock[]" min="0" max="10" value="1" placeholder="在庫数" style="width: 80px; margin-left: 5px;">
                             <button type="button" class="button button-small wpsr-remove-time-slot">削除</button>
                         </div>
                     </div>
@@ -348,6 +715,12 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
     border-radius: 4px;
     font-size: 12px;
     margin: 2px;
+}
+
+.wpsr-time-slot-badge.wpsr-time-slot-full {
+    background: #95a5a6;
+    color: #fff;
+    cursor: not-allowed;
 }
 
 .wpsr-availability-yes {
@@ -480,29 +853,35 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 }
 
 .fc-day-available {
-    position: relative;
+    position: relative !important;
 }
 
 .fc-day-available::after {
-    content: '';
-    position: absolute;
-    bottom: 5px;
-    right: 5px;
-    width: 8px;
-    height: 8px;
-    background-color: #4caf50;
-    border-radius: 50%;
+    content: '' !important;
+    position: absolute !important;
+    bottom: 5px !important;
+    right: 5px !important;
+    width: 8px !important;
+    height: 8px !important;
+    background-color: #4caf50 !important;
+    border-radius: 50% !important;
+    z-index: 10 !important;
+}
+
+.fc-day-unavailable {
+    position: relative !important;
 }
 
 .fc-day-unavailable::after {
-    content: '';
-    position: absolute;
-    bottom: 5px;
-    right: 5px;
-    width: 8px;
-    height: 8px;
-    background-color: #f44336;
-    border-radius: 50%;
+    content: '' !important;
+    position: absolute !important;
+    bottom: 5px !important;
+    right: 5px !important;
+    width: 8px !important;
+    height: 8px !important;
+    background-color: #f44336 !important;
+    border-radius: 50% !important;
+    z-index: 10 !important;
 }
 
 /* 設定例のスタイル */

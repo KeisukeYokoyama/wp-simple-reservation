@@ -15,12 +15,12 @@ $form_manager = new WPSR_Form_Manager();
 ?>
 
 <div class="wpsr-reservation-form" id="wpsr-reservation-form">
-    <form id="wpsr-form" method="post">
+    <form id="wpsr-form" method="post" action="<?php echo esc_url(home_url('/booking/confirm/')); ?>">
         <?php wp_nonce_field('wpsr_nonce', 'wpsr_nonce'); ?>
         
         <!-- 個人情報入力セクション -->
         <div class="wpsr-section">
-            <h3 class="wpsr-section-title">個人情報入力</h3>
+            <h3 class="wpsr-section-title"><?php echo wp_kses_post(get_option('wpsr_personal_info_title', '個人情報入力')); ?></h3>
             
             <!-- 動的に生成されたフィールド -->
             <?php echo $form_manager->generate_form_html(); ?>
@@ -28,12 +28,17 @@ $form_manager = new WPSR_Form_Manager();
         
         <!-- 面談予約セクション -->
         <div class="wpsr-section">
-            <h3 class="wpsr-section-title">面談予約</h3>
-            <p class="wpsr-section-description">面談を行える日時を教えて下さい</p>
+            <h3 class="wpsr-section-title"><?php echo wp_kses_post(get_option('wpsr_booking_title', '面談予約')); ?></h3>
+            <p class="wpsr-section-description"><?php echo wp_kses_post(get_option('wpsr_booking_description', '面談を行える日時を教えて下さい')); ?></p>
             
+            <?php 
+            $notice_text = get_option('wpsr_notice_text', '※仮予約ではなく、選択したお時間で予約完了となりますので、確実にご参加いただける日程をご選択ください。');
+            if (!empty(trim($notice_text))): 
+            ?>
             <div class="wpsr-notice">
-                <p class="wpsr-notice-text">※仮予約ではなく、選択したお時間で予約完了となりますので、確実にご参加いただける日程をご選択ください。</p>
+                <p class="wpsr-notice-text"><?php echo wp_kses_post($notice_text); ?></p>
             </div>
+            <?php endif; ?>
             
             <!-- 日付選択 -->
             <div class="wpsr-form-group">
@@ -52,23 +57,24 @@ $form_manager = new WPSR_Form_Manager();
             </div>
         </div>
         
+        <?php 
+        $info_section_content = get_option('wpsr_info_section_content', '無料面談は入会のためのステップではなく、あなたの結婚の悩みを解消する場です。まずはお気軽にお問い合わせください。');
+        if (!empty(trim($info_section_content))): 
+        ?>
         <!-- 確認・補足情報セクション -->
         <div class="wpsr-section">
             <div class="wpsr-info-box">
                 <div class="wpsr-info-content">
-                    <p class="wpsr-info-text">無料面談は入会のためのステップではなく、あなたの結婚の悩みを解消する場です。まずはお気軽にお問い合わせください。</p>
-                    <div class="wpsr-info-icon">
-                        <!-- アイコンはCSSで実装 -->
-                    </div>
+                    <div class="wpsr-info-text"><?php echo wp_kses_post($info_section_content); ?></div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         
         <!-- 送信ボタン -->
         <div class="wpsr-form-group">
             <button type="submit" class="wpsr-submit-btn" id="wpsr-submit">
-                <span class="wpsr-submit-text">ご入力内容の確認</span>
-                <span class="wpsr-submit-icon">→</span>
+                <span class="wpsr-submit-text"><?php echo esc_html(get_option('wpsr_submit_button_text', 'ご入力内容の確認')); ?></span>
             </button>
         </div>
         
@@ -97,3 +103,10 @@ $form_manager = new WPSR_Form_Manager();
         <p class="wpsr-error-text" id="wpsr-error-message"></p>
     </div>
 </div>
+
+<!-- 設定値をJavaScriptに渡す -->
+<script type="text/javascript">
+var wpsrDisplaySettings = {
+    displayDays: <?php echo intval(get_option('wpsr_display_days', 7)); ?>
+};
+</script>

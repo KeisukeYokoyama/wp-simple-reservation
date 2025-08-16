@@ -78,7 +78,7 @@
             return;
         }
         
-        // 現在日から1週間分の日付を生成
+        // 設定された日数分の日付を生成
         const dates = generateWeekDates();
         
         // 日付カードを生成
@@ -94,13 +94,18 @@
     }
     
     /**
-     * 1週間分の日付を生成
+     * 設定された日数分の日付を生成
      */
     function generateWeekDates() {
         const dates = [];
         const today = new Date();
         
-        for (let i = 0; i < 7; i++) {
+        // 設定から表示日数を取得（デフォルトは7日）
+        const displayDays = (typeof wpsrDisplaySettings !== 'undefined' && wpsrDisplaySettings.displayDays) 
+            ? wpsrDisplaySettings.displayDays 
+            : 7;
+        
+        for (let i = 0; i < displayDays; i++) {
             const date = new Date(today);
             date.setDate(today.getDate() + i);
             
@@ -185,6 +190,7 @@
                 nonce: wpsr_ajax.nonce
             },
             success: function(response) {
+                console.log('WPSR Schedule Response:', response);
                 if (response.success) {
                     displayTimeSlots(response.data.time_slots);
                 } else {
@@ -210,6 +216,7 @@
         
         let html = '';
         timeSlots.forEach((slot, index) => {
+            console.log('WPSR Time Slot:', slot);
             const isRecommended = index === 0; // 最初の時間枠をおすすめとする
             
             // 予約締切日をチェック
@@ -225,20 +232,36 @@
                     </button>
                 `;
             } else {
-                // 通常の時間枠
-                html += `
-                    <button type="button" class="wpsr-time-slot ${isRecommended ? 'recommended' : ''}" 
-                            data-time="${slot.time}">
-                        <span class="wpsr-time-text">${slot.time}</span>
-                    </button>
-                `;
+                // 在庫チェック
+                console.log('WPSR Stock Check:', slot.time, 'current_stock:', slot.current_stock, 'type:', typeof slot.current_stock);
+                if (slot.current_stock !== undefined && slot.current_stock !== null && parseInt(slot.current_stock) <= 0) {
+                    // 在庫なしの場合はグレーアウトして×表示
+                    console.log('WPSR Creating full slot for:', slot.time);
+                    html += `
+                        <button type="button" class="wpsr-time-slot wpsr-time-slot-full" 
+                                data-time="${slot.time}" disabled>
+                            <span class="wpsr-time-text">${slot.time}</span>
+                            <span class="wpsr-full-label">×</span>
+                        </button>
+                    `;
+                } else {
+                    // 通常の時間枠（在庫情報付き）
+                    const stockInfo = slot.current_stock ? `（残り${slot.current_stock}）` : '';
+                    console.log('WPSR Creating normal slot for:', slot.time, 'stock:', stockInfo);
+                    html += `
+                        <button type="button" class="wpsr-time-slot ${isRecommended ? 'recommended' : ''}" 
+                                data-time="${slot.time}">
+                            <span class="wpsr-time-text">${slot.time}${stockInfo}</span>
+                        </button>
+                    `;
+                }
             }
         });
         
         container.html(html);
         
-        // 時間枠のクリックイベント（締切日を過ぎていないもののみ）
-        $('.wpsr-time-slot:not(.deadline-passed)').on('click', function() {
+        // 時間枠のクリックイベント（締切日を過ぎていないもの、在庫ありのもののみ）
+        $('.wpsr-time-slot:not(.deadline-passed):not(.wpsr-time-slot-full)').on('click', function() {
             selectTimeSlot($(this));
         });
         
@@ -246,6 +269,12 @@
         $('.wpsr-time-slot.deadline-passed').on('click', function(e) {
             e.preventDefault();
             showDeadlineTooltip($(this));
+        });
+        
+        // 在庫なしの時間枠のクリックイベント
+        $('.wpsr-time-slot.wpsr-time-slot-full').on('click', function(e) {
+            e.preventDefault();
+            alert('この時間は満席です。別の時間をお選びください。');
         });
     }
     
@@ -260,6 +289,11 @@
      * 時間枠を選択
      */
     function selectTimeSlot(timeSlot) {
+        // 在庫なしの時間枠は選択不可
+        if (timeSlot.hasClass('wpsr-time-slot-full')) {
+            return;
+        }
+        
         $('.wpsr-time-slot').removeClass('selected');
         timeSlot.addClass('selected');
         
@@ -283,7 +317,7 @@
         
         // フォームデータを取得
         const formData = new FormData($('#wpsr-form')[0]);
-        formData.append('action', 'wpsr_save_reservation');
+        formData.append('action', 'wpsr_save_session_data');
         formData.append('nonce', wpsr_ajax.nonce);
         
         // フォームデータのログ出力
@@ -292,7 +326,7 @@
             console.log(key + ':', value);
         }
         
-        // Ajaxで送信
+        // Ajaxでセッションデータを保存
         $.ajax({
             url: wpsr_ajax.ajax_url,
             type: 'POST',
@@ -304,7 +338,8 @@
                 console.log('WPSR Ajax Success Response:', response);
                 
                 if (response.success) {
-                    showSuccess();
+                    // 確認画面に遷移
+                    window.location.href = response.data.redirect_url;
                 } else {
                     console.log('WPSR Ajax Error Response:', response);
                     showError(response.data || wpsr_ajax.strings.error);
@@ -376,6 +411,15 @@
         if (!selectedDate || !selectedTime) {
             showError('日時を選択してください');
             isValid = false;
+        }
+        
+        // 在庫チェック
+        if (selectedTime) {
+            const selectedTimeSlot = $(`.wpsr-time-slot[data-time="${selectedTime}"]`);
+            if (selectedTimeSlot.hasClass('wpsr-time-slot-full')) {
+                showError('選択された時間は満席です。別の時間をお選びください。');
+                isValid = false;
+            }
         }
         
         // 予約締切日のチェック

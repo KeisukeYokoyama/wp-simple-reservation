@@ -7,6 +7,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// WordPressの関数を使用するための確認
+if (!function_exists('esc_html')) {
+    require_once(ABSPATH . 'wp-includes/formatting.php');
+}
+
 // フォームマネージャーを取得
 if (!class_exists('WPSR_Form_Manager')) {
     require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-form-manager.php';
@@ -23,6 +28,13 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 
 <div class="wrap">
     <h1 class="wp-heading-inline">フォーム設定</h1>
+    
+    <div class="wpsr-admin-actions">
+        <button type="button" class="button button-secondary" id="wpsr-update-table">
+            データベーステーブルを更新
+        </button>
+        <span class="wpsr-help-text">フィールドを追加・削除した後にテーブルを更新する必要がある場合があります。</span>
+    </div>
     
     <div class="wpsr-admin-content">
         <div class="wpsr-form-settings-container">
@@ -74,7 +86,7 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
                         <p>フィールドが設定されていません。上記からフィールドを追加してください。</p>
                     </div>
                 <?php else: ?>
-                    <table class="wp-list-table widefat fixed striped">
+                    <table class="wp-list-table widefat fixed striped wpsr-fields-table">
                         <thead>
                             <tr>
                                 <th>順序</th>
@@ -85,11 +97,11 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
                                 <th>操作</th>
                             </tr>
                         </thead>
-                        <tbody id="wpsr-fields-list">
+                        <tbody id="wpsr-fields-list" class="wpsr-fields-list">
                             <?php foreach ($fields as $field): ?>
-                                <tr data-field-id="<?php echo esc_attr($field['id']); ?>">
+                                <tr data-field-id="<?php echo esc_attr($field['id']); ?>" data-sort-order="<?php echo esc_attr($field['sort_order']); ?>">
                                     <td>
-                                        <span class="wpsr-sort-handle">↕</span>
+                                        <span class="wpsr-sort-handle" title="ドラッグして並び替え">↕</span>
                                         <?php echo esc_html($field['sort_order']); ?>
                                     </td>
                                     <td><?php echo esc_html($field['field_label']); ?></td>
@@ -193,6 +205,24 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 </div>
 
 <style>
+.wpsr-admin-actions {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.wpsr-admin-actions .button {
+    margin-right: 10px;
+}
+
+.wpsr-help-text {
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+}
+
 .wpsr-admin-content {
     margin-top: 20px;
 }
@@ -245,6 +275,39 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
     cursor: move;
     color: #666;
     font-weight: bold;
+    padding: 5px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.wpsr-sort-handle:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+/* 並び替え中のスタイル */
+.wpsr-fields-list.ui-sortable-helper {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    border: 1px solid #ddd;
+}
+
+.wpsr-fields-list.ui-sortable-placeholder {
+    background: #f9f9f9;
+    border: 2px dashed #ccc;
+    height: 50px;
+}
+
+/* 並び替え中の行のスタイル */
+.wpsr-fields-list tr.ui-sortable-helper {
+    background: #fff !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.wpsr-fields-list tr.ui-sortable-placeholder {
+    background: #f9f9f9 !important;
+    border: 2px dashed #ccc;
+    height: 50px;
 }
 
 .wpsr-status-required {
@@ -271,7 +334,7 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 .wpsr-modal {
     display: none;
     position: fixed;
-    z-index: 1000;
+    z-index: 999999;
     left: 0;
     top: 0;
     width: 100%;

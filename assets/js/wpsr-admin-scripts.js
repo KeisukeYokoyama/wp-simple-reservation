@@ -3,6 +3,9 @@
  * 管理画面用のJavaScript
  */
 
+// WordPress管理画面用のajaxurlを定義
+var ajaxurl = typeof wpsr_ajax !== 'undefined' ? wpsr_ajax.ajax_url : '/wp-admin/admin-ajax.php';
+
 (function($) {
     'use strict';
     
@@ -141,17 +144,33 @@
             
             // データを準備
             const scheduleId = $('#wpsr-schedule-id').val();
+            const isAvailable = $('#wpsr-schedule-available').is(':checked');
+            
+            // デバッグ用：チェックボックスの状態をログに記録
+            console.log('Checkbox checked:', isAvailable);
+            console.log('Checkbox element:', $('#wpsr-schedule-available'));
+            
             const data = {
                 action: 'wpsr_save_schedule',
                 nonce: wpsr_ajax.nonce,
                 date: $('#wpsr-schedule-date').val(),
                 schedule_id: scheduleId,
-                is_available: $('#wpsr-schedule-available').is(':checked') ? 1 : 0
+                is_available: isAvailable ? 1 : 0
             };
             
             // 時間枠データを追加
             timeSlots.forEach((slot, index) => {
                 data['time_slots[' + index + ']'] = slot;
+            });
+            
+            // 在庫数データを追加
+            const maxStocks = [];
+            $('input[name="max_stock[]"]').each(function() {
+                maxStocks.push($(this).val());
+            });
+            
+            maxStocks.forEach((stock, index) => {
+                data['max_stock[' + index + ']'] = stock;
             });
             
             // デバッグ用：送信するデータをログに記録
@@ -172,6 +191,10 @@
                         // カレンダーを更新
                         if (window.wpsrCalendar) {
                             window.wpsrCalendar.refetchEvents();
+                            // カレンダーの表示を更新
+                            setTimeout(function() {
+                                updateAllDayCells();
+                            }, 200);
                         }
                         
                         // スケジュールリストを更新
@@ -215,6 +238,8 @@
             const timeSlotHtml = `
                 <div class="wpsr-time-slot-input">
                     <input type="time" name="time_slots[]" required>
+                    <label style="margin-left: 10px; font-size: 12px; color: #666;">予約可能数:</label>
+                    <input type="number" name="max_stock[]" min="0" max="10" value="1" placeholder="在庫数" style="width: 80px; margin-left: 5px;">
                     <button type="button" class="button button-small wpsr-remove-time-slot">削除</button>
                 </div>
             `;
@@ -237,6 +262,8 @@
             // タブ名に応じてコンテンツを表示
             if (tabName === 'settings') {
                 $('#schedule-settings').addClass('active');
+            } else if (tabName === 'display') {
+                $('#display-settings').addClass('active');
             } else {
                 $('#' + tabName + '-schedules').addClass('active');
             }
@@ -248,6 +275,11 @@
         function initCalendar() {
             const calendarEl = document.getElementById('wpsr-calendar');
             if (!calendarEl) return;
+            
+            // 既存のカレンダーインスタンスがあれば破棄
+            if (window.wpsrCalendar) {
+                window.wpsrCalendar.destroy();
+            }
             
             const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
@@ -282,8 +314,10 @@
                         arg.el.classList.add('fc-day-holiday');
                     }
                     
-                    // 予約状況の表示
-                    displayScheduleStatus(arg.el, date);
+                    // 予約状況の表示（遅延実行で確実に処理）
+                    setTimeout(function() {
+                        displayScheduleStatus(arg.el, date);
+                    }, 50);
                 },
                 datesSet: function(info) {
                     // 月が変わった時の処理
@@ -299,6 +333,52 @@
             
             // グローバル変数に保存
             window.wpsrCalendar = calendar;
+            
+            // カレンダーの強制更新
+            setTimeout(function() {
+                calendar.refetchEvents();
+                // 全ての日付セルの表示を更新
+                updateAllDayCells();
+            }, 100);
+        }
+        
+        /**
+         * 全ての日付セルの表示を更新
+         */
+        function updateAllDayCells() {
+            const dayCells = document.querySelectorAll('.fc-daygrid-day');
+            dayCells.forEach(function(cell) {
+                // data-date属性から日付を取得（より確実）
+                const dataDate = cell.getAttribute('data-date');
+                if (dataDate) {
+                    // その日のスケジュール状況を確認
+                    $.ajax({
+                        url: wpsr_ajax.ajax_url,
+                        type: 'POST',
+                        data: {
+                            action: 'wpsr_get_schedule_by_date',
+                            date: dataDate,
+                            nonce: wpsr_ajax.nonce
+                        },
+                        success: function(response) {
+                            // 既存のクラスをクリア
+                            cell.classList.remove('fc-day-available', 'fc-day-unavailable');
+                            
+                            if (response.success && response.data) {
+                                const schedule = response.data;
+                                if (schedule.is_available == 1) {
+                                    cell.classList.add('fc-day-available');
+                                } else {
+                                    cell.classList.add('fc-day-unavailable');
+                                }
+                            }
+                        },
+                        error: function() {
+                            console.log('Error updating cell for date:', dataDate);
+                        }
+                    });
+                }
+            });
         }
         
         /**
@@ -349,7 +429,12 @@
          * 予約状況を表示
          */
         function displayScheduleStatus(cellEl, date) {
-            const dateStr = date.toISOString().split('T')[0];
+            // 日本時間で日付を取得
+            const japanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+            const dateStr = japanTime.toISOString().split('T')[0];
+            
+            // 既存のクラスをクリア
+            cellEl.classList.remove('fc-day-available', 'fc-day-unavailable');
             
             // Ajaxで予約状況を取得
             $.ajax({
@@ -363,11 +448,17 @@
                 success: function(response) {
                     if (response.success && response.data) {
                         const schedule = response.data;
+                        console.log('Schedule for', dateStr, ':', schedule);
+                        
                         if (schedule.is_available == 1) {
                             cellEl.classList.add('fc-day-available');
+                            console.log('Added available class for', dateStr);
                         } else {
                             cellEl.classList.add('fc-day-unavailable');
+                            console.log('Added unavailable class for', dateStr);
                         }
+                    } else {
+                        console.log('No schedule data for', dateStr);
                     }
                 },
                 error: function() {
@@ -404,7 +495,12 @@
          * 日付クリック時の処理
          */
         function handleDateClick(dateStr) {
-            console.log('Date clicked:', dateStr);
+            // 日本時間で日付を取得
+            const date = new Date(dateStr);
+            const japanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+            const japanDateStr = japanTime.toISOString().split('T')[0];
+            
+            console.log('Date clicked:', dateStr, '-> Japan time:', japanDateStr);
             
             // 選択された日付のスケジュールを確認
             $.ajax({
@@ -412,7 +508,7 @@
                 type: 'POST',
                 data: {
                     action: 'wpsr_get_schedule_by_date',
-                    date: dateStr,
+                    date: japanDateStr,
                     nonce: wpsr_ajax.nonce
                 },
                 success: function(response) {
@@ -421,13 +517,13 @@
                         loadScheduleDataForEdit(response.data);
                     } else {
                         // スケジュールが存在しない場合は新規追加モード
-                        showScheduleModalForDate(dateStr);
+                        showScheduleModalForDate(japanDateStr);
                     }
                 },
                 error: function() {
-                    console.log('Schedule check error for date:', dateStr);
+                    console.log('Schedule check error for date:', japanDateStr);
                     // エラーの場合は新規追加モードで表示
-                    showScheduleModalForDate(dateStr);
+                    showScheduleModalForDate(japanDateStr);
                 }
             });
         }
@@ -438,8 +534,10 @@
         function updateScheduleListContent(schedules) {
             const container = $('#wpsr-schedule-list-content');
             
-            // 本日以降のスケジュールのみをフィルタリング
-            const today = new Date().toISOString().split('T')[0];
+            // 本日以降のスケジュールのみをフィルタリング（日本時間）
+            const now = new Date();
+            const japanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+            const today = japanTime.toISOString().split('T')[0];
             const futureSchedules = schedules.filter(function(schedule) {
                 return schedule.date >= today;
             });
@@ -458,10 +556,21 @@
                 html += '<td>' + schedule.date + '</td>';
                 html += '<td>';
                 
-                if (schedule.time_slots) {
-                    const timeSlots = JSON.parse(schedule.time_slots);
+                if (schedule.time_slots_with_stock) {
+                    const timeSlots = JSON.parse(schedule.time_slots_with_stock);
                     timeSlots.forEach(function(slot) {
-                        html += '<span class="wpsr-time-slot-badge">' + slot.time + '</span>';
+                        let stockInfo = '';
+                        let cssClass = 'wpsr-time-slot-badge';
+                        
+                        if (slot.max_stock !== undefined && slot.current_stock !== undefined) {
+                            if (slot.current_stock <= 0) {
+                                stockInfo = '（満席）';
+                                cssClass += ' wpsr-time-slot-full';
+                            } else {
+                                stockInfo = '（残り' + slot.current_stock + '）';
+                            }
+                        }
+                        html += '<span class="' + cssClass + '">' + slot.time + stockInfo + '</span>';
                     });
                 }
                 
@@ -548,19 +657,29 @@
          * 編集用にスケジュールデータを読み込み
          */
         function loadScheduleDataForEdit(schedule) {
+            // デバッグ用：スケジュールデータをログに記録
+            console.log('Loading schedule data for edit:', schedule);
+            
             // フォームにデータを設定
             $('#wpsr-schedule-id').val(schedule.id);
             $('#wpsr-schedule-date').val(schedule.date);
             $('#wpsr-schedule-available').prop('checked', schedule.is_available == 1);
             
+            // デバッグ用：チェックボックスの状態をログに記録
+            console.log('is_available value:', schedule.is_available);
+            console.log('Checkbox checked after setting:', $('#wpsr-schedule-available').is(':checked'));
+            
             // 時間枠を設定
             $('#wpsr-time-slots-container').empty();
-            if (schedule.time_slots) {
-                const timeSlots = JSON.parse(schedule.time_slots);
+            if (schedule.time_slots_with_stock) {
+                const timeSlots = JSON.parse(schedule.time_slots_with_stock);
                 timeSlots.forEach(function(slot) {
+                    const maxStock = slot.max_stock || 1;
                     const timeSlotHtml = `
                         <div class="wpsr-time-slot-input">
                             <input type="time" name="time_slots[]" value="${slot.time}" required>
+                            <label style="margin-left: 10px; font-size: 12px; color: #666;">予約可能数:</label>
+                            <input type="number" name="max_stock[]" min="0" max="10" value="${maxStock}" placeholder="在庫数" style="width: 80px; margin-left: 5px;">
                             <button type="button" class="button button-small wpsr-remove-time-slot">削除</button>
                         </div>
                     `;
@@ -593,6 +712,10 @@
                         // カレンダーを更新
                         if (window.wpsrCalendar) {
                             window.wpsrCalendar.refetchEvents();
+                            // カレンダーの表示を更新
+                            setTimeout(function() {
+                                updateAllDayCells();
+                            }, 200);
                         }
                         // スケジュールリストを更新
                         const currentDate = window.wpsrCalendar ? window.wpsrCalendar.getDate() : new Date();
@@ -856,6 +979,13 @@
     function initFormSettings() {
         console.log('Form settings initialized'); // デバッグ用
         
+        // モーダルの初期状態を確認
+        console.log('Modal initial state:', {
+            exists: $('#wpsr-field-modal').length > 0,
+            display: $('#wpsr-field-modal').css('display'),
+            zIndex: $('#wpsr-field-modal').css('z-index')
+        });
+        
         // テンプレートフィールド追加
         $('.wpsr-add-template-field').on('click', function(e) {
             console.log('Template field button clicked'); // デバッグ用
@@ -875,8 +1005,10 @@
         
         // フィールド編集
         $('.wpsr-edit-field').on('click', function(e) {
+            console.log('Edit field button clicked'); // デバッグ用
             e.preventDefault();
             const fieldId = $(this).data('field-id');
+            console.log('Field ID:', fieldId); // デバッグ用
             loadFieldData(fieldId);
         });
         
@@ -912,6 +1044,136 @@
         $('#wpsr-field-form').on('submit', function(e) {
             e.preventDefault();
             saveField();
+        });
+        
+        // テーブル更新ボタン
+        $('#wpsr-update-table').on('click', function(e) {
+            e.preventDefault();
+            updateReservationsTable();
+        });
+        
+        // フィールド並び替え機能の初期化
+        initFieldSorting();
+    }
+    
+    /**
+     * フィールド並び替え機能を初期化
+     */
+    function initFieldSorting() {
+        console.log('Initializing field sorting...'); // デバッグ用
+        
+        // jQuery UI Sortableが利用可能かチェック
+        if (typeof $.fn.sortable === 'undefined') {
+            console.log('jQuery UI Sortable not available, loading...'); // デバッグ用
+            // jQuery UIを動的に読み込み
+            loadJQueryUI();
+            return;
+        }
+        
+        // 並び替え機能を初期化
+        $('#wpsr-fields-list').sortable({
+            handle: '.wpsr-sort-handle',
+            axis: 'y',
+            cursor: 'move',
+            opacity: 0.8,
+            helper: function(e, tr) {
+                // ヘルパー要素のスタイルを設定
+                var $originals = tr.children();
+                var $helper = tr.clone();
+                $helper.children().each(function(index) {
+                    $(this).width($originals.eq(index).width());
+                });
+                return $helper;
+            },
+            start: function(event, ui) {
+                console.log('Sorting started'); // デバッグ用
+                ui.placeholder.height(ui.item.height());
+            },
+            update: function(event, ui) {
+                console.log('Sorting updated'); // デバッグ用
+                updateFieldOrder();
+            }
+        });
+        
+        console.log('Field sorting initialized successfully'); // デバッグ用
+    }
+    
+    /**
+     * jQuery UIを動的に読み込み
+     */
+    function loadJQueryUI() {
+        // jQuery UI CSS
+        if (!$('link[href*="jquery-ui"]').length) {
+            $('head').append('<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">');
+        }
+        
+        // jQuery UI JavaScript
+        $.getScript('https://code.jquery.com/ui/1.13.2/jquery-ui.min.js')
+            .done(function() {
+                console.log('jQuery UI loaded successfully'); // デバッグ用
+                initFieldSorting();
+            })
+            .fail(function() {
+                console.error('Failed to load jQuery UI'); // デバッグ用
+                alert('並び替え機能の読み込みに失敗しました。');
+            });
+    }
+    
+    /**
+     * フィールドの並び順を更新
+     */
+    function updateFieldOrder() {
+        console.log('Updating field order...'); // デバッグ用
+        
+        const newOrder = [];
+        $('#wpsr-fields-list tr').each(function(index) {
+            const fieldId = $(this).data('field-id');
+            console.log('Processing row', index, 'field_id:', fieldId); // デバッグ用
+            if (fieldId) {
+                newOrder.push({
+                    field_id: fieldId,
+                    sort_order: index + 1
+                });
+            }
+        });
+        
+        console.log('New order:', newOrder); // デバッグ用
+        console.log('New order JSON:', JSON.stringify(newOrder)); // デバッグ用
+        
+        const ajaxData = {
+            action: 'wpsr_update_field_order',
+            nonce: wpsr_ajax.nonce,
+            field_order: JSON.stringify(newOrder)
+        };
+        console.log('Ajax data:', ajaxData); // デバッグ用
+        console.log('Ajax URL:', wpsr_ajax.ajax_url); // デバッグ用
+        console.log('Nonce:', wpsr_ajax.nonce); // デバッグ用
+        
+        // Ajaxで並び順を更新
+        $.ajax({
+            url: wpsr_ajax.ajax_url,
+            type: 'POST',
+            data: ajaxData,
+            success: function(response) {
+                console.log('Update order response:', response); // デバッグ用
+                if (response.success) {
+                    // 成功時は順序番号を更新
+                    $('#wpsr-fields-list tr').each(function(index) {
+                        $(this).find('td:first').text(index + 1);
+                        $(this).attr('data-sort-order', index + 1);
+                    });
+                    console.log('Field order updated successfully'); // デバッグ用
+                } else {
+                    console.error('Failed to update field order:', response.data); // デバッグ用
+                    alert('並び順の更新に失敗しました。');
+                    location.reload(); // ページを再読み込み
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Ajax error updating field order:', xhr.responseText); // デバッグ用
+                alert('並び順の更新中にエラーが発生しました。');
+                location.reload(); // ページを再読み込み
+            }
         });
     }
     
@@ -953,6 +1215,7 @@
      * フィールドデータを読み込む
      */
     function loadFieldData(fieldId) {
+        console.log('loadFieldData function started for field ID:', fieldId); // デバッグ用
         $.ajax({
             url: wpsr_ajax.ajax_url,
             type: 'POST',
@@ -962,8 +1225,11 @@
                 nonce: wpsr_ajax.nonce
             },
             success: function(response) {
-                if (response.success) {
-                    const field = response.data;
+                console.log('Get field response:', response); // デバッグ用
+                try {
+                    if (response.success) {
+                        const field = response.data;
+                        console.log('Field data:', field); // デバッグ用
                     
                     // フォームにデータを設定
                     $('#wpsr-field-id').val(field.id);
@@ -975,25 +1241,114 @@
                     $('#wpsr-field-visible').prop('checked', field.visible == 1);
                     
                     // 選択肢の設定
+                    console.log('Starting field options processing...'); // デバッグ用
                     if (field.field_options) {
-                        const options = JSON.parse(field.field_options);
-                        if (typeof options === 'object') {
-                            const optionsText = Object.values(options).join('\n');
-                            $('#wpsr-field-options').val(optionsText);
+                        try {
+                            console.log('Field options raw:', field.field_options);
+                            
+                            // 二重エスケープの可能性を考慮した処理
+                            let optionsText = field.field_options;
+                            
+                            // まず通常のJSON.parseを試行
+                            try {
+                                const options = JSON.parse(optionsText);
+                                console.log('Parsed options (first attempt):', options);
+                                if (typeof options === 'object') {
+                                    const values = Object.values(options);
+                                    console.log('Options values:', values);
+                                    $('#wpsr-field-options').val(values.join('\n'));
+                                    console.log('Options set successfully'); // デバッグ用
+                                }
+                            } catch (firstError) {
+                                console.log('First JSON.parse failed:', firstError.message);
+                            }
+                            
+                            // 二重エスケープされている可能性がある場合の処理
+                            try {
+                                // エスケープされた文字列を復元
+                                const unescaped = optionsText.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                                console.log('Unescaped options:', unescaped);
+                                const options = JSON.parse(unescaped);
+                                console.log('Parsed options (second attempt):', options);
+                                if (typeof options === 'object') {
+                                    const values = Object.values(options);
+                                    console.log('Options values (second attempt):', values);
+                                    $('#wpsr-field-options').val(values.join('\n'));
+                                    console.log('Options set successfully (second attempt)'); // デバッグ用
+                                }
+                            } catch (secondError) {
+                                console.log('Second JSON.parse failed:', secondError.message);
+                            }
+                            
+                            // 最後の手段：手動でパース
+                            try {
+                                // 単純な文字列として処理
+                                const cleanText = optionsText.replace(/[{}"]/g, '').replace(/\\/g, '');
+                                const pairs = cleanText.split(',');
+                                const values = [];
+                                pairs.forEach(pair => {
+                                    const colonIndex = pair.indexOf(':');
+                                    if (colonIndex > 0) {
+                                        const value = pair.substring(colonIndex + 1).trim();
+                                        if (value) {
+                                            values.push(value);
+                                        }
+                                    }
+                                });
+                                console.log('Manual parsed values:', values);
+                                $('#wpsr-field-options').val(values.join('\n'));
+                                console.log('Options set successfully (manual)'); // デバッグ用
+                            } catch (manualError) {
+                                console.error('Manual parsing failed:', manualError);
+                                $('#wpsr-field-options').val('');
+                            }
+                            
+                        } catch (error) {
+                            console.error('Error parsing field options:', error);
+                            // エラーが発生した場合は空文字を設定
+                            $('#wpsr-field-options').val('');
                         }
+                    } else {
+                        console.log('No field options found');
+                        $('#wpsr-field-options').val('');
                     }
+                    console.log('Field options processing completed'); // デバッグ用
                     
                     // オプショングループの表示/非表示
+                    console.log('Starting toggleOptionsGroup for field type:', field.field_type); // デバッグ用
                     toggleOptionsGroup(field.field_type);
+                    console.log('toggleOptionsGroup completed'); // デバッグ用
                     
                     // モーダルを表示
+                    console.log('Starting modal display process...'); // デバッグ用
+                    console.log('Setting modal title to: フィールド編集'); // デバッグ用
                     $('#wpsr-field-modal-title').text('フィールド編集');
+                    console.log('Modal element exists:', $('#wpsr-field-modal').length > 0); // デバッグ用
+                    console.log('Modal current display:', $('#wpsr-field-modal').css('display')); // デバッグ用
                     $('#wpsr-field-modal').show();
+                    console.log('Modal display after show():', $('#wpsr-field-modal').css('display')); // デバッグ用
+                    
+                    // 強制的にモーダルを表示
+                    setTimeout(function() {
+                        console.log('Executing forced modal display...'); // デバッグ用
+                        $('#wpsr-field-modal').css({
+                            'display': 'block',
+                            'z-index': '999999'
+                        });
+                        console.log('Modal forced display:', $('#wpsr-field-modal').css('display')); // デバッグ用
+                    }, 100);
+                    console.log('Modal display process completed'); // デバッグ用
                 } else {
+                    console.error('Get field failed:', response.data); // デバッグ用
                     alert(response.data || 'フィールドデータの取得に失敗しました。');
                 }
+                } catch (error) {
+                    console.error('Error in loadFieldData success handler:', error); // デバッグ用
+                    alert('フィールドデータの処理中にエラーが発生しました。');
+                }
             },
-            error: function() {
+            error: function(xhr, status, error) {
+                console.error('Ajax error:', xhr.responseText); // デバッグ用
                 alert('通信エラーが発生しました。');
             }
         });
@@ -1020,6 +1375,10 @@
             }
         }
         
+        // チェックボックスの値を確実に取得
+        const requiredChecked = $('#wpsr-field-required').is(':checked');
+        const visibleChecked = $('#wpsr-field-visible').is(':checked');
+        
         const data = {
             action: fieldId ? 'wpsr_update_field' : 'wpsr_add_field',
             nonce: wpsr_ajax.nonce,
@@ -1029,9 +1388,22 @@
             field_label: $('#wpsr-field-label').val(),
             field_placeholder: $('#wpsr-field-placeholder').val(),
             field_options: fieldOptions,
-            required: $('#wpsr-field-required').is(':checked') ? 1 : 0,
-            visible: $('#wpsr-field-visible').is(':checked') ? 1 : 0
+            required: requiredChecked ? 1 : 0,
+            visible: visibleChecked ? 1 : 0
         };
+        
+        // チェックボックスがチェックされていない場合でも、明示的に0を送信
+        if (!requiredChecked) {
+            data.required = 0;
+        }
+        if (!visibleChecked) {
+            data.visible = 0;
+        }
+        
+        // デバッグ用：送信データをログに記録
+        console.log('Sending field data:', data);
+        console.log('Required checkbox checked:', $('#wpsr-field-required').is(':checked'));
+        console.log('Visible checkbox checked:', $('#wpsr-field-visible').is(':checked'));
         
         // バリデーション
         if (!data.field_key || !data.field_label) {
@@ -1111,12 +1483,49 @@
      * オプショングループの表示/非表示を切り替え
      */
     function toggleOptionsGroup(fieldType) {
+        console.log('Toggle options group for field type:', fieldType); // デバッグ用
         const optionsGroup = $('#wpsr-field-options-group');
+        console.log('Options group element:', optionsGroup.length > 0 ? 'found' : 'not found'); // デバッグ用
+        
         if (['select', 'radio', 'checkbox'].includes(fieldType)) {
+            console.log('Showing options group'); // デバッグ用
             optionsGroup.show();
         } else {
+            console.log('Hiding options group'); // デバッグ用
             optionsGroup.hide();
         }
+    }
+    
+    /**
+     * 予約テーブルを更新
+     */
+    function updateReservationsTable() {
+        if (!confirm('データベーステーブルを更新しますか？\n\nこの操作により、フィールドの追加・削除に応じてテーブル構造が更新されます。')) {
+            return;
+        }
+        
+        console.log('Updating reservations table...'); // デバッグ用
+        
+        $.ajax({
+            url: wpsr_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'wpsr_update_reservations_table',
+                nonce: wpsr_ajax.nonce
+            },
+            success: function(response) {
+                console.log('Update table response:', response); // デバッグ用
+                if (response.success) {
+                    alert(response.data);
+                } else {
+                    alert(response.data || 'テーブル更新に失敗しました。');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Ajax error updating table:', xhr.responseText); // デバッグ用
+                alert('テーブル更新中にエラーが発生しました。');
+            }
+        });
     }
     
 })(jQuery);

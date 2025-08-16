@@ -51,6 +51,8 @@ class WP_Simple_Reservation {
         
         // ショートコード登録
         add_shortcode('wp_simple_reservation_form', array($this, 'render_reservation_form'));
+        add_shortcode('wp_simple_reservation_confirm', array($this, 'render_reservation_confirm'));
+        add_shortcode('wp_simple_reservation_complete', array($this, 'render_reservation_complete'));
         
         // アクティベーション・デアクティベーション
         register_activation_hook(__FILE__, array($this, 'activate'));
@@ -302,6 +304,55 @@ class WP_Simple_Reservation {
         // テンプレートファイルを読み込み
         ob_start();
         include WPSR_PLUGIN_PATH . 'templates/reservation-form.php';
+        return ob_get_clean();
+    }
+    
+    public function render_reservation_confirm($atts) {
+        // ショートコードの属性を解析
+        $atts = shortcode_atts(array(
+            'title' => __('予約確認', 'wp-simple-reservation')
+        ), $atts);
+        
+        // URLパラメータからデータを取得
+        $encoded_data = isset($_GET['data']) ? sanitize_text_field($_GET['data']) : '';
+        
+        if (empty($encoded_data)) {
+            return '<div class="wpsr-error-message">データが見つかりません。予約フォームから再度お試しください。</div>';
+        }
+        
+        // データをデコード
+        $decoded_data = json_decode(base64_decode($encoded_data), true);
+        
+        if (!$decoded_data || !isset($decoded_data['schedule_date']) || !isset($decoded_data['schedule_time'])) {
+            return '<div class="wpsr-error-message">データの形式が正しくありません。予約フォームから再度お試しください。</div>';
+        }
+        
+        // デバッグログ
+        error_log('WPSR Debug - Confirm page - Decoded data: ' . print_r($decoded_data, true));
+        
+        // フォームデータをグローバル変数に設定（テンプレートで使用）
+        global $wpsr_form_data;
+        $wpsr_form_data = $decoded_data;
+        
+        // テンプレートファイルを読み込み
+        ob_start();
+        include WPSR_PLUGIN_PATH . 'templates/reservation-confirm.php';
+        return ob_get_clean();
+    }
+    
+    public function render_reservation_complete($atts) {
+        // ショートコードの属性を解析
+        $atts = shortcode_atts(array(
+            'title' => __('予約完了', 'wp-simple-reservation')
+        ), $atts);
+        
+        // URLパラメーターから状態を取得
+        $status = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
+        $reservation_id = isset($_GET['reservation_id']) ? intval($_GET['reservation_id']) : 0;
+        
+        // テンプレートファイルを読み込み
+        ob_start();
+        include WPSR_PLUGIN_PATH . 'templates/reservation-complete.php';
         return ob_get_clean();
     }
     

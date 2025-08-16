@@ -192,6 +192,16 @@ $from_name = get_option('wpsr_from_name', get_bloginfo('name'));
         <p class="description">カスタムタイトルで予約フォームを表示します。</p>
     </div>
     
+    <div class="wpsr-shortcode-info">
+        <code>[wp_simple_reservation_confirm]</code>
+        <p class="description">予約確認画面を表示します。</p>
+    </div>
+    
+    <div class="wpsr-shortcode-info">
+        <code>[wp_simple_reservation_complete]</code>
+        <p class="description">予約完了画面を表示します。</p>
+    </div>
+    
     <hr>
     
     <h2>データベース情報</h2>

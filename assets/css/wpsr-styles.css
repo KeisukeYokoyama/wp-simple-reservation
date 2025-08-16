@@ -184,18 +184,11 @@
 
 /* 注意書き */
 .wpsr-notice {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 8px;
-    padding: 15px;
     margin: 20px 0;
 }
 
 .wpsr-notice-text {
-    color: #856404;
     margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
 }
 
 /* 日付選択 */
@@ -319,6 +312,44 @@
     font-weight: bold;
 }
 
+/* 在庫なしの時間枠 */
+.wpsr-time-slot.wpsr-time-slot-full {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+    position: relative;
+}
+
+.wpsr-time-slot.wpsr-time-slot-full:hover {
+    border-color: #dee2e6;
+    background: #f8f9fa;
+    transform: none;
+}
+
+.wpsr-time-slot.wpsr-time-slot-full:disabled {
+    opacity: 0.7;
+}
+
+.wpsr-full-label {
+    position: absolute;
+    top: -8px;
+    right: 10px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    font-weight: bold;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
 /* 締切日ツールチップ */
 .wpsr-deadline-tooltip {
     position: absolute;
@@ -363,36 +394,15 @@
 
 /* 情報ボックス */
 .wpsr-info-box {
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
-    border-radius: 8px;
-    padding: 20px;
+    margin: 20px 0;
 }
 
 .wpsr-info-content {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+    /* ユーザーがカスタマイズ可能 */
 }
 
 .wpsr-info-text {
-    flex: 1;
     margin: 0;
-    color: #155724;
-    font-size: 16px;
-    line-height: 1.6;
-}
-
-.wpsr-info-icon {
-    width: 60px;
-    height: 60px;
-    background: #27ae60;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 24px;
 }
 
 /* 送信ボタン */
@@ -421,11 +431,6 @@
 
 .wpsr-submit-btn:active {
     transform: translateY(0);
-}
-
-.wpsr-submit-icon {
-    font-size: 20px;
-    font-weight: bold;
 }
 
 /* ローディング */
