@@ -7,6 +7,40 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// 設定の保存処理
+if (isset($_POST['wpsr_save_settings'])) {
+    if (wp_verify_nonce($_POST['wpsr_settings_nonce'], 'wpsr_settings')) {
+        // 顧客向けメール設定
+        update_option('wpsr_email_subject', sanitize_text_field($_POST['email_subject']));
+        update_option('wpsr_email_body', wp_kses_post($_POST['email_body']));
+        
+        // 管理者向けメール設定
+        update_option('wpsr_admin_email_subject', sanitize_text_field($_POST['admin_email_subject']));
+        update_option('wpsr_admin_email_body', wp_kses_post($_POST['admin_email_body']));
+        
+        // メールアドレス設定
+        update_option('wpsr_admin_email', sanitize_email($_POST['admin_email']));
+        update_option('wpsr_from_email', sanitize_email($_POST['from_email']));
+        update_option('wpsr_from_name', sanitize_text_field($_POST['from_name']));
+        
+        echo '<div class="notice notice-success"><p>設定が保存されました。</p></div>';
+    }
+}
+
+// データベース更新処理
+if (isset($_POST['wpsr_update_database'])) {
+    if (wp_verify_nonce($_POST['wpsr_db_update_nonce'], 'wpsr_db_update')) {
+        // プラグインのメインクラスを取得してテーブル更新
+        if (class_exists('WP_Simple_Reservation')) {
+            $plugin = WP_Simple_Reservation::get_instance();
+            $plugin->update_tables();
+            echo '<div class="notice notice-success"><p>データベーステーブルが更新されました。</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>プラグインの初期化に失敗しました。</p></div>';
+        }
+    }
+}
+
 // WordPressの関数を使用するための確認
 if (!function_exists('esc_html')) {
     require_once(ABSPATH . 'wp-includes/formatting.php');
@@ -29,15 +63,29 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 <div class="wrap">
     <h1 class="wp-heading-inline">フォーム設定</h1>
     
-    <div class="wpsr-admin-actions">
-        <button type="button" class="button button-secondary" id="wpsr-update-table">
-            データベーステーブルを更新
+    <!-- タブナビゲーション -->
+    <div class="wpsr-tabs">
+        <button class="wpsr-tab-button active" data-tab="fields">
+            <span class="dashicons dashicons-admin-generic"></span>
+            フィールド設定
         </button>
-        <span class="wpsr-help-text">フィールドの追加・削除・編集を行った後は、データベーステーブルを更新して変更を反映してください。</span>
+        <button class="wpsr-tab-button" data-tab="settings">
+            <span class="dashicons dashicons-admin-settings"></span>
+            設定
+        </button>
     </div>
-    
+
     <div class="wpsr-admin-content">
-        <div class="wpsr-form-settings-container">
+        <!-- フィールド設定タブ -->
+        <div class="wpsr-tab-content active" id="fields-settings">
+            <div class="wpsr-admin-actions">
+                <button type="button" class="button button-secondary" id="wpsr-update-table">
+                    データベーステーブルを更新
+                </button>
+                <span class="wpsr-help-text">フィールドの追加・削除・編集を行った後は、データベーステーブルを更新して変更を反映してください。</span>
+            </div>
+            
+            <div class="wpsr-form-settings-container">
 
             <!-- 自由項目セクション -->
             <div class="wpsr-settings-section">
@@ -117,6 +165,122 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
                 <p><small>メールアドレスと名前フィールドは予約システムの基本機能として必要で削除はできません</small></p>
             </div>
             
+        </div>
+        </div>
+        
+        <!-- 設定タブ -->
+        <div class="wpsr-tab-content" id="settings-tab">
+            <h3>フォーム設定</h3>
+            <p>フォームの動作に関する設定を行います。</p>
+            
+            <form method="post" action="">
+                <?php wp_nonce_field('wpsr_settings', 'wpsr_settings_nonce'); ?>
+                
+                <h4>メール設定</h4>
+                
+                <h5>送信元設定</h5>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="from_name">送信者名</label>
+                        </th>
+                        <td>
+                            <input type="text" id="from_name" name="from_name" 
+                                   value="<?php echo esc_attr(get_option('wpsr_from_name', get_bloginfo('name'))); ?>" class="regular-text">
+                            <p class="description">メールの送信者名を設定します。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="from_email">送信元メールアドレス</label>
+                        </th>
+                        <td>
+                            <input type="email" id="from_email" name="from_email" 
+                                   value="<?php echo esc_attr(get_option('wpsr_from_email', get_option('admin_email'))); ?>" class="regular-text">
+                            <p class="description">メールの送信元アドレスを設定します。</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h5>顧客向けメール設定</h5>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="email_subject">メール件名</label>
+                        </th>
+                        <td>
+                            <input type="text" id="email_subject" name="email_subject" 
+                                   value="<?php echo esc_attr(get_option('wpsr_email_subject', '予約確認メール')); ?>" class="regular-text">
+                            <p class="description">予約確認メールの件名を設定します。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="email_body">メール本文</label>
+                        </th>
+                        <td>
+                            <textarea id="email_body" name="email_body" rows="5" class="large-text"><?php echo esc_textarea(get_option('wpsr_email_body', 'ご予約ありがとうございます。')); ?></textarea>
+                            <p class="description">予約確認メールの本文を設定します。</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h5>管理者向けメール設定</h5>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="admin_email_subject">メール件名</label>
+                        </th>
+                        <td>
+                            <input type="text" id="admin_email_subject" name="admin_email_subject" 
+                                   value="<?php echo esc_attr(get_option('wpsr_admin_email_subject', '新しい予約がありました')); ?>" class="regular-text">
+                            <p class="description">管理者向け通知メールの件名を設定します。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">
+                            <label for="admin_email_body">メール本文</label>
+                        </th>
+                        <td>
+                            <textarea id="admin_email_body" name="admin_email_body" rows="5" class="large-text"><?php echo esc_textarea(get_option('wpsr_admin_email_body', '新しい予約が入りました。')); ?></textarea>
+                            <p class="description">管理者向け通知メールの本文を設定します。</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <h5>メールアドレス設定</h5>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="admin_email">管理者メールアドレス</label>
+                        </th>
+                        <td>
+                            <input type="email" id="admin_email" name="admin_email" 
+                                   value="<?php echo esc_attr(get_option('wpsr_admin_email', get_option('admin_email'))); ?>" class="regular-text">
+                            <p class="description">管理者向け通知メールの送信先アドレスを設定します。</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <p class="submit">
+                    <input type="submit" name="wpsr_save_settings" class="button button-primary" value="設定を保存">
+                </p>
+            </form>
+            
+            <hr>
+            
+            <h4>データベース設定</h4>
+            <p>データベーステーブルの更新を行います。</p>
+            
+            <form method="post" action="">
+                <?php wp_nonce_field('wpsr_db_update', 'wpsr_db_update_nonce'); ?>
+                <p class="submit">
+                    <input type="submit" name="wpsr_update_database" class="button button-secondary" value="データベーステーブルを更新">
+                </p>
+            </form>
         </div>
     </div>
 </div>
@@ -213,6 +377,50 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 </div>
 
 <style>
+/* タブスタイル */
+.wpsr-tabs {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 20px;
+}
+
+.wpsr-tab-button {
+    background: #f1f1f1;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wpsr-tab-button:hover {
+    background: #e1e1e1;
+}
+
+.wpsr-tab-button.active {
+    background: #fff;
+    border-bottom: 1px solid #fff;
+    margin-bottom: -1px;
+}
+
+.wpsr-tab-button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.wpsr-tab-content {
+    display: none;
+}
+
+.wpsr-tab-content.active {
+    display: block;
+}
+
 .wpsr-admin-actions {
     margin: 20px 0;
     padding: 15px;
@@ -524,8 +732,26 @@ error_log('WPSR Debug - Custom field types: ' . print_r($custom_field_types, tru
 <!-- 管理画面用のJavaScriptは wpsr-admin-scripts.js で処理されます -->
 
 <script>
-// デバッグ用スクリプト
+// タブ切り替え機能
 jQuery(document).ready(function($) {
+    // タブボタンのクリックイベント
+    $('.wpsr-tab-button').on('click', function() {
+        const targetTab = $(this).data('tab');
+        
+        // アクティブなタブボタンを更新
+        $('.wpsr-tab-button').removeClass('active');
+        $(this).addClass('active');
+        
+        // タブコンテンツを切り替え
+        $('.wpsr-tab-content').removeClass('active');
+        if (targetTab === 'fields') {
+            $('#fields-settings').addClass('active');
+        } else if (targetTab === 'settings') {
+            $('#settings-tab').addClass('active');
+        }
+    });
+    
+    // デバッグ用スクリプト
     console.log('Form settings page loaded');
     console.log('Template field buttons:', $('.wpsr-add-template-field').length);
     console.log('Custom field buttons:', $('.wpsr-add-custom-field').length);
@@ -544,7 +770,7 @@ jQuery(document).ready(function($) {
         console.log('Template field button clicked (direct)');
     });
     
-    $('.wpsr-add-custom-field').on('click', function() {
+        $('.wpsr-add-custom-field').on('click', function() {
         console.log('Custom field button clicked (direct)');
     });
 });

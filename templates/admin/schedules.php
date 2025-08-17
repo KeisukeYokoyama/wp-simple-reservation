@@ -109,7 +109,6 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 
 <div class="wrap">
     <h1 class="wp-heading-inline">スケジュール管理</h1>
-    <a href="#" class="page-title-action" id="wpsr-add-schedule">スケジュールを追加</a>
     
     <!-- タブナビゲーション -->
     <div class="wpsr-tabs">
@@ -134,6 +133,10 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
     <div class="wpsr-admin-content">
         <!-- 今後のスケジュールタブ -->
         <div class="wpsr-tab-content active" id="current-schedules">
+            <div class="wpsr-admin-actions">
+                <button type="button" class="button button-primary" id="wpsr-add-schedule">スケジュールを追加</button>
+            </div>
+            
             <!-- カレンダー表示エリア -->
             <div class="wpsr-calendar-container">
                 <div id="wpsr-calendar"></div>
@@ -213,6 +216,9 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
 
         <!-- アーカイブタブ -->
         <div class="wpsr-tab-content" id="archive-schedules">
+            <h3>過去のスケジュール</h3>
+            <p>過去のスケジュールを確認できます。</p>
+            
             <?php
             // 過去のスケジュールを取得（日本時間）
             $past_schedules = $wpdb->get_results($wpdb->prepare("
@@ -292,6 +298,10 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
         <div class="wpsr-tab-content" id="display-settings">
             <h3>フロントエンド表示設定</h3>
             <p>フロントエンドの予約フォームの表示に関する設定を行います。</p>
+            
+            <div class="wpsr-admin-actions">
+                <button type="submit" form="wpsr-display-settings-form" class="button button-primary">表示設定を保存</button>
+            </div>
             
             <form method="post" action="" id="wpsr-display-settings-form">
                 <?php wp_nonce_field('wpsr_display_settings', 'wpsr_display_nonce'); ?>
@@ -552,6 +562,10 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
             <h3>表示期間設定</h3>
             <p>フロントエンドで表示する予約可能な期間を設定できます。</p>
             
+            <div class="wpsr-admin-actions">
+                <button type="submit" form="wpsr-display-period-form" class="button button-primary">表示期間設定を保存</button>
+            </div>
+            
             <form method="post" action="" id="wpsr-display-period-form">
                 <?php wp_nonce_field('wpsr_display_period', 'wpsr_display_period_nonce'); ?>
                 
@@ -572,16 +586,16 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                         </td>
                     </tr>
                 </table>
-                
-                <p class="submit">
-                    <input type="submit" name="wpsr_save_display_period" class="button-primary" value="表示期間設定を保存">
-                </p>
             </form>
             
             <hr>
             
             <h3>予約締切日設定</h3>
             <p>予約を受け付ける期限を設定できます。設定した期限を過ぎた日時は予約できなくなります。</p>
+            
+            <div class="wpsr-admin-actions">
+                <button type="submit" form="wpsr-deadline-settings-form" class="button button-primary">予約締切日設定を保存</button>
+            </div>
             
             <form method="post" action="" id="wpsr-deadline-settings-form">
                 <?php wp_nonce_field('wpsr_deadline_settings', 'wpsr_deadline_nonce'); ?>
@@ -619,10 +633,6 @@ if (isset($_POST['wpsr_save_deadline_settings'])) {
                         </td>
                     </tr>
                 </table>
-                
-                <p class="submit">
-                    <input type="submit" name="wpsr_save_deadline_settings" class="button-primary" value="予約締切日設定を保存">
-                </p>
             </form>
             
             <hr>

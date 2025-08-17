@@ -16,6 +16,30 @@ $email_search = $_GET['email_search'] ?? '';
 $name_search = $_GET['name_search'] ?? '';
 $status_filter = $_GET['status'] ?? array();
 
+// ソート条件を取得
+$sort_column = $_GET['sort'] ?? 'created_at';
+$sort_order = $_GET['order'] ?? 'desc';
+
+// ソート可能な列を定義
+$sortable_columns = array(
+    'id' => 'id',
+    'name' => 'name',
+    'email' => 'email',
+    'schedule_date' => 'schedule_date',
+    'status' => 'status',
+    'created_at' => 'created_at'
+);
+
+// ソート列の検証
+if (!array_key_exists($sort_column, $sortable_columns)) {
+    $sort_column = 'created_at';
+}
+
+// ソート順の検証
+if (!in_array($sort_order, array('asc', 'desc'))) {
+    $sort_order = 'desc';
+}
+
 // WHERE句を構築
 $where_conditions = array();
 $where_values = array();
@@ -51,7 +75,9 @@ $sql = "SELECT * FROM {$wpdb->prefix}wpsr_reservations";
 if (!empty($where_conditions)) {
     $sql .= " WHERE " . implode(" AND ", $where_conditions);
 }
-$sql .= " ORDER BY created_at DESC";
+
+// ソート条件を追加
+$sql .= " ORDER BY {$sortable_columns[$sort_column]} {$sort_order}";
 
 // 予約一覧を取得
 if (!empty($where_values)) {
@@ -80,8 +106,8 @@ if (!empty($where_values)) {
                     <label>メールアドレス:</label>
                     <input type="text" name="email_search" value="<?php echo esc_attr($_GET['email_search'] ?? ''); ?>" placeholder="メールアドレスを入力">
                 </div>
-            </div>
-            
+                </div>
+                
             <div class="wpsr-search-row">
                 <div class="wpsr-search-group wpsr-date-range">
                     <label>予約日時:</label>
@@ -89,9 +115,9 @@ if (!empty($where_values)) {
                         <input type="date" name="schedule_date_from" value="<?php echo esc_attr($_GET['schedule_date_from'] ?? ''); ?>" placeholder="開始日">
                         <span class="wpsr-date-separator">〜</span>
                         <input type="date" name="schedule_date_to" value="<?php echo esc_attr($_GET['schedule_date_to'] ?? ''); ?>" placeholder="終了日">
-                    </div>
                 </div>
-                
+            </div>
+            
                 <div class="wpsr-search-group">
                     <label>ステータス:</label>
                     <div class="wpsr-checkbox-group">
@@ -136,17 +162,70 @@ if (!empty($where_values)) {
                 <p><?php echo $has_search ? '検索条件に一致する予約がありません。' : 'まだ予約がありません。'; ?></p>
             </div>
         <?php else: ?>
-            <table class="wp-list-table widefat fixed striped">
+            <table class="wp-list-table widefat fixed striped table-view-list">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>名前</th>
-                        <th>メール</th>
-                        <th>電話</th>
-                        <th>予約日時</th>
-                        <th>ステータス</th>
-                        <th>登録日</th>
-                        <th>操作</th>
+                        <th scope="col" class="manage-column column-id sortable <?php echo ($sort_column === 'id') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="ID">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'id', 'order' => ($sort_column === 'id' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>ID</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'id' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-name sortable <?php echo ($sort_column === 'name') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="名前">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'name', 'order' => ($sort_column === 'name' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>名前</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'name' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-email sortable <?php echo ($sort_column === 'email') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="メール">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'email', 'order' => ($sort_column === 'email' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>メール</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'email' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-schedule-date sortable <?php echo ($sort_column === 'schedule_date') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="予約日時">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'schedule_date', 'order' => ($sort_column === 'schedule_date' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>予約日時</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'schedule_date' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-status sortable <?php echo ($sort_column === 'status') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="ステータス">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'status', 'order' => ($sort_column === 'status' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>ステータス</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'status' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-created-at sortable <?php echo ($sort_column === 'created_at') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="登録日">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'created_at', 'order' => ($sort_column === 'created_at' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>登録日</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'created_at' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-actions">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -155,7 +234,6 @@ if (!empty($where_values)) {
                             <td><?php echo esc_html($reservation->id); ?></td>
                             <td><?php echo esc_html($reservation->name); ?></td>
                             <td><?php echo esc_html($reservation->email); ?></td>
-                            <td><?php echo esc_html($reservation->phone); ?></td>
                             <td>
                                 <?php 
                                 echo esc_html($reservation->schedule_date) . ' ' . 
@@ -175,13 +253,78 @@ if (!empty($where_values)) {
                                 </a>
                                 <a href="#" class="button button-small wpsr-delete-reservation" 
                                    data-id="<?php echo esc_attr($reservation->id); ?>"
-                                   data-name="<?php echo esc_attr($reservation->name); ?>">
+                                   data-name="<?php echo esc_attr($reservation->id); ?>">
                                     削除
                                 </a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <th scope="col" class="manage-column column-id sortable <?php echo ($sort_column === 'id') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="ID">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'id', 'order' => ($sort_column === 'id' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>ID</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'id' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-name sortable <?php echo ($sort_column === 'name') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="名前">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'name', 'order' => ($sort_column === 'name' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>名前</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'name' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-email sortable <?php echo ($sort_column === 'email') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="メール">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'email', 'order' => ($sort_column === 'email' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>メール</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'email' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-schedule-date sortable <?php echo ($sort_column === 'schedule_date') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="予約日時">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'schedule_date', 'order' => ($sort_column === 'schedule_date' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>予約日時</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'schedule_date' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-status sortable <?php echo ($sort_column === 'status') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="ステータス">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'status', 'order' => ($sort_column === 'status' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>ステータス</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'status' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-created-at sortable <?php echo ($sort_column === 'created_at') ? ($sort_order === 'asc' ? 'asc' : 'desc') : 'desc'; ?>" abbr="登録日">
+                            <a href="<?php echo add_query_arg(array_merge($_GET, array('sort' => 'created_at', 'order' => ($sort_column === 'created_at' && $sort_order === 'asc') ? 'desc' : 'asc'))); ?>">
+                                <span>登録日</span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                                <span class="screen-reader-text"><?php echo ($sort_column === 'created_at' && $sort_order === 'asc') ? '降順で並べ替え。' : '昇順で並べ替え。'; ?></span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column column-actions">操作</th>
+                    </tr>
+                </tfoot>
             </table>
         <?php endif; ?>
     </div>
@@ -200,58 +343,55 @@ if (!empty($where_values)) {
             <!-- 基本情報セクション -->
             <div class="wpsr-form-section">
                 <h3>予約状況</h3>
-                
-                <div class="wpsr-form-group">
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-reservation-date">予約日 *</label>
                     <input type="date" id="wpsr-reservation-date" name="schedule_date" required readonly>
                     <small class="wpsr-field-note">日付変更はできません</small>
-                </div>
-                
-                <div class="wpsr-form-group">
+            </div>
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-reservation-time">予約時間 *</label>
                     <input type="time" id="wpsr-reservation-time" name="schedule_time" required readonly>
                     <small class="wpsr-field-note">時間変更はできません</small>
-                </div>
-                
-                <div class="wpsr-form-group">
+            </div>
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-reservation-status">ステータス</label>
                     <select id="wpsr-reservation-status" name="status">
                         <option value="pending">保留中</option>
                         <option value="confirmed">確認済み</option>
                         <option value="cancelled">キャンセル</option>
                     </select>
-                </div>
+            </div>
                 
                 <div class="wpsr-notice">
                     <p><strong>⚠️ 注意事項</strong></p>
                     <p>予約時間の変更は、他の予約との競合を避けるためこの画面では行えません。変更が必要な場合は、以下の手順で手動で対応してください。</p>
                     <ol>
                         <li>現在の予約を削除</li>
-                        <li>希望時間で新規予約を作成</li>
+                        <li>新しい時間で予約を作成</li>
                     </ol>
                 </div>
             </div>
             
             <!-- 動的フィールドセクション -->
             <div class="wpsr-form-section">
-                <h3>入力情報</h3>
-                <div id="wpsr-dynamic-fields">
-                    <!-- 動的にフィールドが生成されます -->
+                <h3>予約者情報</h3>
+                <div id="wpsr-dynamic-fields-container">
+                    <!-- 動的フィールドがここに生成されます -->
                 </div>
             </div>
             
-            <div class="wpsr-form-group">
-                <label for="wpsr-reservation-message">メッセージ</label>
-                <textarea id="wpsr-reservation-message" name="message" rows="4"></textarea>
-            </div>
-            
             <div class="wpsr-modal-footer">
-                <button type="submit" class="button button-primary">保存</button>
+                <button type="submit" class="button button-primary">更新</button>
                 <button type="button" class="button wpsr-modal-cancel">キャンセル</button>
             </div>
         </form>
     </div>
 </div>
+
+
 
 <!-- 新規予約作成モーダル -->
 <div id="wpsr-add-reservation-modal" class="wpsr-modal" style="display: none;">
@@ -264,26 +404,26 @@ if (!empty($where_values)) {
             <!-- 基本情報セクション -->
             <div class="wpsr-form-section">
                 <h3>予約状況</h3>
-                
-                <div class="wpsr-form-group">
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-add-reservation-date">予約日 *</label>
                     <input type="date" id="wpsr-add-reservation-date" name="schedule_date" required>
-                </div>
-                
-                <div class="wpsr-form-group">
+            </div>
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-add-reservation-time">予約時間 *</label>
                     <select id="wpsr-add-reservation-time" name="schedule_time" required>
                         <option value="">時間を選択してください</option>
                     </select>
-                </div>
-                
-                <div class="wpsr-form-group">
+            </div>
+            
+            <div class="wpsr-form-group">
                     <label for="wpsr-add-reservation-status">ステータス</label>
                     <select id="wpsr-add-reservation-status" name="status">
-                        <option value="pending">保留中</option>
-                        <option value="confirmed">確認済み</option>
-                        <option value="cancelled">キャンセル</option>
-                    </select>
+                    <option value="pending">保留中</option>
+                    <option value="confirmed">確認済み</option>
+                    <option value="cancelled">キャンセル</option>
+                </select>
                 </div>
             </div>
             
@@ -405,6 +545,8 @@ if (!empty($where_values)) {
     width: 16px;
     height: 16px;
 }
+
+
 
 .wpsr-search-actions {
     text-align: right;

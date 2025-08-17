@@ -71,21 +71,14 @@ class WPSR_Admin {
         
         add_submenu_page(
             'wpsr-schedules', // 親メニューをwpsr-schedulesに変更
-            __('フォーム設定', 'wp-simple-reservation'),
-            __('フォーム設定', 'wp-simple-reservation'),
+            __('フォーム', 'wp-simple-reservation'),
+            __('フォーム', 'wp-simple-reservation'),
             'manage_options',
             'wpsr-form-settings',
             array($this, 'render_form_settings_page')
         );
         
-        add_submenu_page(
-            'wpsr-schedules', // 親メニューをwpsr-schedulesに変更
-            __('設定', 'wp-simple-reservation'),
-            __('設定', 'wp-simple-reservation'),
-            'manage_options',
-            'wpsr-settings',
-            array($this, 'render_settings_page')
-        );
+        // 設定画面はフォーム設定内のタブに移動したため削除
         
         add_submenu_page(
             'wpsr-schedules', // 親メニューをwpsr-schedulesに変更
