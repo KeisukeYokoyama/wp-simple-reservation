@@ -130,8 +130,17 @@
      * 日付カードを作成
      */
     function createDateCard(dateInfo, isSelected = false) {
+        let holidayClass = '';
+        if (dateInfo.isHoliday) {
+            if (dateInfo.date.getDay() === 6) { // 土曜日
+                holidayClass = 'holiday saturday';
+            } else if (dateInfo.date.getDay() === 0) { // 日曜日
+                holidayClass = 'holiday sunday';
+            }
+        }
+        
         const card = $('<div>', {
-            class: `wpsr-date-card ${isSelected ? 'selected' : ''} ${dateInfo.isHoliday ? 'holiday' : ''}`,
+            class: `wpsr-date-card ${isSelected ? 'selected' : ''} ${holidayClass}`,
             'data-date': dateInfo.formatted,
             tabindex: 0
         });
@@ -220,7 +229,6 @@
         let html = '';
         timeSlots.forEach((slot, index) => {
             console.log('WPSR Time Slot:', slot);
-            const isRecommended = index === 0; // 最初の時間枠をおすすめとする
             
             // 予約締切日をチェック
             const isDeadlinePassed = checkBookingDeadline(selectedDate, slot.time);
@@ -252,7 +260,7 @@
                     const stockInfo = slot.current_stock ? `（残り${slot.current_stock}）` : '';
                     console.log('WPSR Creating normal slot for:', slot.time, 'stock:', stockInfo);
                     html += `
-                        <button type="button" class="wpsr-time-slot ${isRecommended ? 'recommended' : ''}" 
+                        <button type="button" class="wpsr-time-slot" 
                                 data-time="${slot.time}">
                             <span class="wpsr-time-text">${slot.time}${stockInfo}</span>
                         </button>
@@ -626,7 +634,7 @@
      * 休日かどうかを判定
      */
     function isHoliday(day) {
-        return day === 0; // 日曜日を休日とする
+        return day === 0 || day === 6; // 土曜日(6)と日曜日(0)を休日とする
     }
     
     /**

@@ -334,7 +334,7 @@ class WPSR_Form_Manager {
         $html .= '<label for="wpsr-' . esc_attr($field['field_key']) . '" class="wpsr-label">';
         $html .= esc_html($field['field_label']);
         if ($field['required']) {
-            $html .= ' <span class="wpsr-required">*</span>';
+            $html .= ' <span class="wpsr-required">必須</span>';
         }
         $html .= '</label>';
         

@@ -3,32 +3,51 @@
  * モダンでレスポンシブな予約フォームスタイル
  */
 
+/* フォームラッパー - テーマの影響を排除 */
+.wpsr-form-wrapper {
+    all: unset !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 24px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
 /* 基本設定 */
 .wpsr-reservation-form {
-    max-width: 800px;
+    width: 450px;
+    max-width: calc(100vw - 48px);
+    min-width: 450px;
     margin: 0 auto;
     padding: 20px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.6;
     color: #333;
+    flex-shrink: 0 !important;
+    box-sizing: border-box;
 }
 
 /* セクション */
 .wpsr-section {
     margin-bottom: 40px;
     padding: 30px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    background: transparent;
 }
 
 .wpsr-section-title {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
     margin: 0 0 20px 0;
     color: #2c3e50;
-    border-bottom: 3px solid #3498db;
-    padding-bottom: 10px;
+    text-align: center;
+}
+
+/* 2番目以降のセクションタイトル（面談予約など） */
+.wpsr-section-title + .wpsr-section-title {
+    margin-top: 40px;
 }
 
 .wpsr-section-description {
@@ -40,6 +59,8 @@
 /* フォームグループ */
 .wpsr-form-group {
     margin-bottom: 25px;
+    margin-left: 8px;
+    margin-right: 8px;
 }
 
 .wpsr-label {
@@ -51,31 +72,42 @@
 }
 
 .wpsr-required {
-    color: #e74c3c;
-    font-weight: bold;
+    display: inline-block;
+    background: #ef4444; /* bg-red-500 */
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: normal;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-left: 8px;
+    vertical-align: middle;
+    line-height: 1.2;
 }
 
 /* 入力フィールド */
 .wpsr-input,
 .wpsr-select {
     width: 100%;
-    padding: 12px 16px;
-    border: 2px solid #e1e8ed;
+    max-width: calc(100% - 2px);
+    padding: 16px 16px;
+    border: 1px solid #e1e8ed;
     border-radius: 8px;
     font-size: 16px;
     transition: all 0.3s ease;
+    box-sizing: border-box;
     background: #fff;
 }
 
 .wpsr-input:focus,
 .wpsr-select:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    /* border-color: #374151; */
+    /* box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); */
 }
 
 .wpsr-input::placeholder {
-    color: #95a5a6;
+    color: #d1d5db; /* text-gray-300 */
+    font-weight: normal;
 }
 
 /* エラー状態 */
@@ -103,7 +135,7 @@
     align-items: center;
     cursor: pointer;
     padding: 12px 20px;
-    border: 2px solid #e1e8ed;
+    border: 1px solid #e1e8ed;
     border-radius: 8px;
     transition: all 0.3s ease;
     background: #fff;
@@ -147,7 +179,7 @@
     align-items: center;
     cursor: pointer;
     padding: 12px 20px;
-    border: 2px solid #e1e8ed;
+    border: 1px solid #e1e8ed;
     border-radius: 8px;
     transition: all 0.3s ease;
     background: #fff;
@@ -184,7 +216,7 @@
     align-items: center;
     cursor: pointer;
     padding: 12px 20px;
-    border: 2px solid #e1e8ed;
+    border: 1px solid #e1e8ed;
     border-radius: 8px;
     background: #fff;
     transition: all 0.3s ease;
@@ -192,7 +224,7 @@
 }
 
 .wpsr-gender-option:hover {
-    border-color: #3498db;
+    border-color: #374151;
     background: #f8f9fa;
 }
 
@@ -206,22 +238,16 @@
     font-size: 14px;
     color: #333;
     font-weight: 500;
-    margin-left: 8px;
 }
 
 /* 選択された性別オプションのスタイル */
-.wpsr-gender-option input[type="radio"]:checked + .wpsr-gender-text {
-    color: #fff;
+.wpsr-gender-option.selected {
+    background: #374151; /* bg-gray-700 */
+    border-color: #374151;
 }
 
-.wpsr-gender-option input[type="radio"]:checked {
-    background: #3498db;
-    border-color: #3498db;
-    color: #fff;
-}
-
-.wpsr-gender-option input[type="radio"]:checked + .wpsr-gender-text {
-    color: #fff;
+.wpsr-gender-option.selected .wpsr-gender-text {
+    color: #ffffff; /* white */
 }
 
 /* 日付グループ */
@@ -249,44 +275,70 @@
     gap: 10px;
     overflow-x: auto;
     padding: 10px 0;
+    margin-left: 8px;
+    margin-right: 8px;
 }
 
 .wpsr-date-card {
-    min-width: 80px;
+    width: 80px;
+    height: 80px;
     padding: 15px 10px;
     text-align: center;
-    border: 2px solid #e1e8ed;
+    border: none; /* ボーダーなし */
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: #fff;
+    background: #f3f4f6; /* bg-gray-100 */
     flex-shrink: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .wpsr-date-card:hover {
-    border-color: #3498db;
-    background: #f8f9fa;
+    background: #e5e7eb; /* bg-gray-200 for hover */
+}
+
+/* 土日の色設定 - 基本状態 */
+.wpsr-date-card.holiday.saturday .wpsr-date-day,
+.wpsr-date-card.holiday.saturday .wpsr-date-weekday {
+    color: #0ea5e9; /* sky-500 for Saturday */
+}
+
+.wpsr-date-card.holiday.sunday .wpsr-date-day,
+.wpsr-date-card.holiday.sunday .wpsr-date-weekday {
+    color: #f43f5e; /* rose-500 for Sunday and holidays */
 }
 
 .wpsr-date-card.selected {
-    border-color: #3498db;
-    background: #3498db;
-    color: #fff;
+    background: #374151; /* bg-gray-700 */
+    color: #ffffff; /* white */
 }
 
-.wpsr-date-card.holiday {
-    color: #e74c3c;
+/* 選択状態では土日関係なく白文字 - 最高優先度 */
+.wpsr-date-card.selected .wpsr-date-day,
+.wpsr-date-card.selected .wpsr-date-weekday {
+    color: #ffffff !important; /* white for all selected dates */
 }
 
 .wpsr-date-day {
     font-size: 18px;
     font-weight: 600;
     margin-bottom: 5px;
+    color: #111827; /* text-gray-900 */
 }
 
 .wpsr-date-weekday {
     font-size: 12px;
-    opacity: 0.8;
+    color: #111827; /* text-gray-900 */
+}
+
+/* 通常状態の日付カードのテキスト色を明示的に設定 */
+.wpsr-date-card:not(.holiday) .wpsr-date-day,
+.wpsr-date-card:not(.holiday) .wpsr-date-weekday {
+    color: #111827; /* text-gray-900 for non-holiday dates */
 }
 
 /* 時間帯選択 */
@@ -299,13 +351,14 @@
     width: 100%;
     padding: 15px 20px;
     margin-bottom: 10px;
-    border: 2px solid #e1e8ed;
+    border: 1px solid #e1e8ed;
     border-radius: 8px;
     background: #fff;
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: left;
     position: relative;
+    box-sizing: border-box;
 }
 
 .wpsr-time-slot:hover {
@@ -314,23 +367,12 @@
 }
 
 .wpsr-time-slot.selected {
-    border-color: #27ae60;
-    background: #27ae60;
+    border-color: #374151; /* bg-gray-700 */
+    background: #374151; /* bg-gray-700 */
     color: #fff;
 }
 
-.wpsr-time-slot.recommended::before {
-    content: "最短おすすめ";
-    position: absolute;
-    top: -8px;
-    left: 10px;
-    background: #e74c3c;
-    color: #fff;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: bold;
-}
+
 
 /* 締切日を過ぎた時間枠 */
 .wpsr-time-slot.deadline-passed {
@@ -459,9 +501,11 @@
 
 /* 送信ボタン */
 .wpsr-submit-btn {
-    width: 100%;
+    width: 90%;
+    max-width: 90%;
+    margin: 0 auto;
     padding: 18px 30px;
-    background: #27ae60;
+    background: #f43f5e; /* rose-500 */
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -473,12 +517,13 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
+    box-sizing: border-box;
 }
 
 .wpsr-submit-btn:hover {
-    background: #229954;
+    background: #e11d48; /* rose-600 for hover */
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3); /* Updated shadow color */
 }
 
 .wpsr-submit-btn:active {
@@ -630,8 +675,7 @@
 .wpsr-radio:focus-within,
 .wpsr-date-card:focus,
 .wpsr-time-slot:focus {
-    outline: 2px solid #3498db;
-    outline-offset: 2px;
+    outline: 1px solid #374151;
 }
 
 /* ダークモード対応 */

@@ -18,16 +18,13 @@ $form_manager = new WPSR_Form_Manager();
     <form id="wpsr-form" method="post" action="<?php echo esc_url(home_url('/booking/confirm/')); ?>">
         <?php wp_nonce_field('wpsr_nonce', 'wpsr_nonce'); ?>
         
-        <!-- 個人情報入力セクション -->
+        <!-- 予約フォームセクション -->
         <div class="wpsr-section">
             <h3 class="wpsr-section-title"><?php echo wp_kses_post(get_option('wpsr_personal_info_title', '個人情報入力')); ?></h3>
             
             <!-- 動的に生成されたフィールド -->
             <?php echo $form_manager->generate_form_html(); ?>
-        </div>
-        
-        <!-- 面談予約セクション -->
-        <div class="wpsr-section">
+            
             <h3 class="wpsr-section-title"><?php echo wp_kses_post(get_option('wpsr_booking_title', '面談予約')); ?></h3>
             <p class="wpsr-section-description"><?php echo wp_kses_post(get_option('wpsr_booking_description', '面談を行える日時を教えて下さい')); ?></p>
             
@@ -42,7 +39,7 @@ $form_manager = new WPSR_Form_Manager();
             
             <!-- 日付選択 -->
             <div class="wpsr-form-group">
-                <label class="wpsr-label">日付選択 <span class="wpsr-required">*</span></label>
+                <label class="wpsr-label">日付選択 <span class="wpsr-required">必須</span></label>
                 <div class="wpsr-date-picker" id="wpsr-date-picker">
                     <!-- JavaScriptで動的に生成 -->
                 </div>
@@ -50,7 +47,7 @@ $form_manager = new WPSR_Form_Manager();
             
             <!-- 時間帯選択 -->
             <div class="wpsr-form-group">
-                <label class="wpsr-label">時間帯選択 <span class="wpsr-required">*</span></label>
+                <label class="wpsr-label">時間帯選択 <span class="wpsr-required">必須</span></label>
                 <div class="wpsr-time-slots" id="wpsr-time-slots">
                     <p class="wpsr-no-date">日付を選択してください</p>
                 </div>

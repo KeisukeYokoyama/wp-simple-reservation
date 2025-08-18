@@ -377,9 +377,22 @@ class WP_Simple_Reservation {
             'show_calendar' => 'true'
         ), $atts);
         
-        // テンプレートファイルを読み込み
+        // 独自ラッパーdivで囲んでテーマの影響を排除
         ob_start();
-        include WPSR_PLUGIN_PATH . 'templates/reservation-form.php';
+        ?>
+        <div class="wpsr-form-wrapper" style="
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            box-sizing: border-box;
+        ">
+            <?php include WPSR_PLUGIN_PATH . 'templates/reservation-form.php'; ?>
+        </div>
+        <?php
         return ob_get_clean();
     }
     
