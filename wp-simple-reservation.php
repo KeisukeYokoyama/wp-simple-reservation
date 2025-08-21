@@ -282,16 +282,7 @@ class WP_Simple_Reservation {
         // 予約テーブルの必要なカラムの定義
         $required_columns = array(
             'message' => 'text AFTER status',
-            'google_calendar_event_id' => 'varchar(255) AFTER message',
-            'birthdate' => 'date AFTER phone',
-            'box_test' => 'varchar(255) AFTER birthdate',
-            'text_area_test' => 'text AFTER box_test',
-            'radio_test' => 'varchar(50) AFTER text_area_test',
-            'gender' => 'varchar(20) AFTER radio_test',
-            'radio_test_2' => 'varchar(50) AFTER gender',
-            'radio_test_3' => 'varchar(50) AFTER radio_test_2',
-            'age' => 'varchar(20) AFTER radio_test_3',
-            'keiken' => 'varchar(50) AFTER age'
+            'google_calendar_event_id' => 'varchar(255) AFTER message'
         );
         
         // 各カラムが存在するかチェックして、存在しない場合は追加
@@ -337,7 +328,7 @@ class WP_Simple_Reservation {
                     'field_key' => 'name',
                     'field_type' => 'text',
                     'field_label' => 'お名前',
-                    'field_placeholder' => '山田太郎',
+                    'field_placeholder' => '例：山田太郎',
                     'field_options' => '',
                     'required' => 1,
                     'visible' => 1,
@@ -347,7 +338,7 @@ class WP_Simple_Reservation {
                     'field_key' => 'email',
                     'field_type' => 'email',
                     'field_label' => 'メールアドレス',
-                    'field_placeholder' => 'example@email.com',
+                    'field_placeholder' => '例：example@email.com',
                     'field_options' => '',
                     'required' => 1,
                     'visible' => 1,
@@ -470,8 +461,19 @@ class WP_Simple_Reservation {
 
 // プラグインの初期化
 function wpsr_init() {
-    return WP_Simple_Reservation::get_instance();
+    $instance = WP_Simple_Reservation::get_instance();
+    
+    // Googleカレンダーマネージャーを初期化
+    if (!class_exists('WPSR_Google_Calendar_Manager')) {
+        require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-google-calendar.php';
+    }
+    global $wpsr_google_calendar;
+    $wpsr_google_calendar = new WPSR_Google_Calendar_Manager();
+    
+    return $instance;
 }
+
+
 
 // プラグイン開始
 wpsr_init();

@@ -140,6 +140,19 @@
     transition: all 0.3s ease;
     background: #fff;
     user-select: none;
+    position: relative;
+}
+
+/* ラジオボタンアイコン */
+.wpsr-radio::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 50%;
+    margin-right: 12px;
+    background: #fff;
+    flex-shrink: 0;
 }
 
 .wpsr-radio:hover {
@@ -152,13 +165,34 @@
     background: #ebf3fd;
 }
 
-.wpsr-radio input[type="radio"] {
-    display: none;
+/* 選択時のラジオボタンアイコン（二重丸） */
+.wpsr-radio.selected::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    border: 1px solid #3498db;
+    border-radius: 50%;
+    margin-right: 12px;
+    background: #ebf3fd;
+    flex-shrink: 0;
+    position: relative;
 }
 
-.wpsr-radio.selected .wpsr-radio-text {
-    color: #3498db;
-    font-weight: 600;
+/* 選択時の内側の円（二重丸の内側） */
+.wpsr-radio.selected::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3498db;
+    position: absolute;
+    left: 30px;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.wpsr-radio input[type="radio"] {
+    display: none;
 }
 
 .wpsr-radio-text {
@@ -183,6 +217,19 @@
     border-radius: 8px;
     transition: all 0.3s ease;
     background: #fff;
+    position: relative;
+}
+
+/* チェックボックスアイコン */
+.wpsr-checkbox::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    margin-right: 12px;
+    background: #fff;
+    flex-shrink: 0;
 }
 
 .wpsr-checkbox:hover {
@@ -199,9 +246,27 @@
 }
 
 .wpsr-checkbox-text {
-    margin-left: 8px;
+    font-size: 16px;
     font-weight: 500;
     color: #2c3e50;
+}
+
+/* 選択時のチェックマーク */
+.wpsr-checkbox.selected::before {
+    content: "✓";
+    width: 18px;
+    height: 18px;
+    border: 1px solid #3498db;
+    border-radius: 3px;
+    margin-right: 12px;
+    background: #ebf3fd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #3498db;
+    font-size: 16px;
+    font-weight: bold;
 }
 
 /* 性別フィールド */
@@ -341,6 +406,70 @@
     color: #111827; /* text-gray-900 for non-holiday dates */
 }
 
+/* 締切日を過ぎた日付のスタイル */
+.wpsr-date-card.deadline-passed {
+    background: #f3f4f6; /* bg-gray-100 */
+    cursor: not-allowed;
+    opacity: 0.6;
+    position: relative;
+}
+
+.wpsr-date-card.deadline-passed .wpsr-date-day,
+.wpsr-date-card.deadline-passed .wpsr-date-weekday {
+    color: #9ca3af; /* text-gray-400 */
+}
+
+.wpsr-date-card.deadline-passed:hover {
+    background: #f3f4f6; /* bg-gray-100 - ホバー効果を無効化 */
+    transform: none;
+}
+
+.wpsr-deadline-mark {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 20px;
+    height: 20px;
+    background: #ef4444; /* bg-red-500 */
+    color: #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* 締切日ツールチップ */
+.wpsr-date-deadline-tooltip {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937; /* bg-gray-800 */
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.wpsr-date-deadline-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid #1f2937; /* bg-gray-800 */
+}
+
 /* 時間帯選択 */
 .wpsr-time-slots {
     margin-top: 15px;
@@ -356,7 +485,7 @@
     background: #fff;
     cursor: pointer;
     transition: all 0.3s ease;
-    text-align: left;
+    text-align: center;
     position: relative;
     box-sizing: border-box;
 }
@@ -394,16 +523,34 @@
     opacity: 0.7;
 }
 
-.wpsr-deadline-label {
-    position: absolute;
-    top: -8px;
-    right: 10px;
-    background: #6c757d;
-    color: #fff;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
+/* 締切日ラベルを削除 - 時間の横に×を表示 */
+
+/* 予約不可時間の×マークのスタイル */
+.wpsr-time-slot.deadline-passed .wpsr-time-text,
+.wpsr-time-slot.wpsr-time-slot-full .wpsr-time-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+}
+
+/* ×マークの固定幅設定（時刻の前に配置） */
+.wpsr-time-slot.deadline-passed .wpsr-time-text::before,
+.wpsr-time-slot.wpsr-time-slot-full .wpsr-time-text::before {
+    content: "×";
+    font-size: 18px;
     font-weight: bold;
+    color: #e74c3c;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* 時刻の位置を統一するための調整 */
+.wpsr-time-slot.deadline-passed .wpsr-time-text,
+.wpsr-time-slot.wpsr-time-slot-full .wpsr-time-text {
+    transform: translateX(-14px); /* ×マークの幅の半分 + gapの半分 */
 }
 
 /* 在庫なしの時間枠 */
@@ -426,23 +573,7 @@
     opacity: 0.7;
 }
 
-.wpsr-full-label {
-    position: absolute;
-    top: -8px;
-    right: 10px;
-    background: #e74c3c;
-    color: #fff;
-    font-size: 12px;
-    padding: 2px 6px;
-    border-radius: 50%;
-    font-weight: bold;
-    width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-}
+/* 在庫なしラベルを削除 - 時間の横に×を表示 */
 
 /* 締切日ツールチップ */
 .wpsr-deadline-tooltip {
@@ -482,7 +613,7 @@
 .wpsr-no-date {
     text-align: center;
     color: #95a5a6;
-    font-style: italic;
+    font-size: 16px;
     padding: 30px;
 }
 
@@ -552,8 +683,10 @@
 }
 
 .wpsr-loading-text {
-    color: #666;
+    color: #95a5a6;
     font-size: 16px;
+    text-align: center;
+    padding: 30px;
 }
 
 /* 成功・エラーメッセージ */

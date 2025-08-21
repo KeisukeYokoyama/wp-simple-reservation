@@ -16,6 +16,7 @@ class WPSR_Google_Calendar_Manager {
     private $is_enabled;
     
     public function __construct() {
+        // 設定を一度だけ読み込み（パフォーマンス向上）
         $this->api_key = get_option('wpsr_google_calendar_api_key', '');
         $this->calendar_id = get_option('wpsr_google_calendar_id', '');
         
@@ -25,21 +26,32 @@ class WPSR_Google_Calendar_Manager {
         
         $this->is_enabled = get_option('wpsr_google_calendar_enabled', false);
         
-        // 予約保存時のフック
-        add_action('wpsr_reservation_created', array($this, 'create_calendar_event'), 10, 2);
+        // 予約保存時のフック（重複登録を防ぐため、一度だけ登録）
+        static $hook_registered = false;
+        if (!$hook_registered) {
+            add_action('wpsr_reservation_created', array($this, 'create_calendar_event'), 10, 2);
+            $hook_registered = true;
+        }
     }
     
     /**
-     * Googleカレンダー連携が有効かチェック
+     * Googleカレンダー連携が有効かチェック（最適化版）
      */
     public function is_enabled() {
-        return $this->is_enabled && !empty($this->service_account_file) && !empty($this->calendar_id);
+        // 高速チェック：基本設定が無効な場合は即座にfalseを返す
+        if (!$this->is_enabled) {
+            return false;
+        }
+        
+        // 必要な設定が揃っているかチェック
+        return !empty($this->service_account_file) && !empty($this->calendar_id);
     }
     
     /**
-     * 予約からGoogleカレンダーイベントを作成（軽量版）
+     * 予約からGoogleカレンダーイベントを作成（最適化版）
      */
     public function create_calendar_event($reservation_id, $reservation_data) {
+        // 高速チェック：設定が無効な場合は即座に終了
         if (!$this->is_enabled()) {
             return false;
         }
@@ -61,8 +73,6 @@ class WPSR_Google_Calendar_Manager {
             
             // イベントデータを準備
             $event_data = $this->prepare_event_data($reservation_data);
-            
-            // イベントデータの準備が失敗した場合
             if ($event_data === false) {
                 error_log('WPSR Google Calendar: Failed to prepare event data');
                 return false;

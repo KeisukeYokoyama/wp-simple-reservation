@@ -178,7 +178,16 @@ class WPSR_Admin {
         foreach ($visible_fields as $field) {
             $field_key = $field['field_key'];
             if (isset($_POST[$field_key])) {
-                $form_data[$field_key] = sanitize_text_field($_POST[$field_key]);
+                if ($field['field_type'] === 'checkbox') {
+                    // チェックボックスの場合は配列として処理
+                    if (is_array($_POST[$field_key])) {
+                        $form_data[$field_key] = implode(',', $_POST[$field_key]);
+                    } else {
+                        $form_data[$field_key] = sanitize_text_field($_POST[$field_key]);
+                    }
+                } else {
+                    $form_data[$field_key] = sanitize_text_field($_POST[$field_key]);
+                }
             }
         }
         
@@ -232,7 +241,15 @@ class WPSR_Admin {
             if (isset($field['field_key']) && isset($_POST[$field['field_key']])) {
                 if ($field['field_type'] === 'checkbox') {
                     // チェックボックスの場合は配列として保存
-                    $form_data[$field['field_key']] = is_array($_POST[$field['field_key']]) ? implode(',', $_POST[$field['field_key']]) : $_POST[$field['field_key']];
+                    if (is_array($_POST[$field['field_key']])) {
+                        $sanitized_values = array();
+                        foreach ($_POST[$field['field_key']] as $value) {
+                            $sanitized_values[] = sanitize_text_field($value);
+                        }
+                        $form_data[$field['field_key']] = implode(',', $sanitized_values);
+                    } else {
+                        $form_data[$field['field_key']] = sanitize_text_field($_POST[$field['field_key']]);
+                    }
                 } else {
                     $form_data[$field['field_key']] = sanitize_text_field($_POST[$field['field_key']]);
                 }
@@ -250,6 +267,19 @@ class WPSR_Admin {
              AND status = 'cancelled'",
             $schedule_date, $schedule_time
         ));
+        
+        // 重複予約チェック（同じ日時で有効な予約があるかチェック）
+        $duplicate_reservation = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table_reservations} 
+             WHERE schedule_date = %s AND schedule_time = %s 
+             AND status IN ('pending', 'confirmed')",
+            $schedule_date, $schedule_time
+        ));
+        
+        if ($duplicate_reservation) {
+            error_log('WPSR Error - Duplicate reservation detected: ' . $duplicate_reservation->id);
+            wp_send_json_error(__('この時間は既に予約されています。', 'wp-simple-reservation'));
+        }
         
         if ($existing_reservation) {
             // 既存のキャンセル済み予約を更新
@@ -287,8 +317,8 @@ class WPSR_Admin {
         // デバッグログ
         error_log('WPSR Debug - Reservation saved/updated with ID: ' . $reservation_id);
         
-        // 在庫を更新
-        $stock_result = $this->check_and_update_stock($schedule_date, $schedule_time);
+        // 新規予約作成時は在庫を直接減らす
+        $stock_result = $this->decrease_stock($schedule_date, $schedule_time);
         if (!$stock_result['success']) {
             error_log('WPSR Error - Stock update failed: ' . $stock_result['message']);
             // 予約を削除してロールバック
@@ -298,6 +328,10 @@ class WPSR_Admin {
         
         // デバッグログ
         error_log('WPSR Debug - Stock updated successfully');
+        
+        // Googleカレンダー連携を即座に実行（軽量な処理）
+        $reservation_data = array_merge($form_data, array('id' => $reservation_id));
+        do_action('wpsr_reservation_created', $reservation_id, $reservation_data);
         
         // 完了画面のURLを生成
         $complete_url = get_option('wpsr_complete_page_url', home_url('/booking/complete/'));
@@ -309,6 +343,7 @@ class WPSR_Admin {
         // デバッグログ
         error_log('WPSR Debug - Redirect URL: ' . $complete_url);
         
+        // レスポンスを返す
         wp_send_json_success(array('redirect_url' => $complete_url));
     }
     
@@ -478,6 +513,155 @@ class WPSR_Admin {
         );
         
         error_log("WPSR Restore Stock Debug - Update Result: " . ($result !== false ? 'success' : 'failed'));
+        
+        if ($result === false) {
+            return array(
+                'success' => false,
+                'message' => __('在庫の更新に失敗しました。', 'wp-simple-reservation')
+            );
+        }
+        
+        return array('success' => true);
+    }
+    
+    /**
+     * 在庫を直接増やす（予約キャンセル・削除時用）
+     */
+    private function increase_stock($schedule_date, $schedule_time) {
+        global $wpdb;
+        
+        // 指定日のスケジュールを取得
+        $schedule = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}wpsr_schedules WHERE date = %s",
+            $schedule_date
+        ));
+        
+        if (!$schedule) {
+            return array(
+                'success' => false,
+                'message' => __('指定された日付のスケジュールが見つかりません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 時間枠データを解析
+        $time_slots = json_decode($schedule->time_slots_with_stock, true);
+        if (!$time_slots) {
+            return array(
+                'success' => false,
+                'message' => __('スケジュールデータが正しくありません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 指定時間のスロットを検索
+        $slot_index = -1;
+        $schedule_time_formatted = substr($schedule_time, 0, 5);
+        
+        foreach ($time_slots as $index => $slot) {
+            if ($slot['time'] === $schedule_time_formatted) {
+                $slot_index = $index;
+                break;
+            }
+        }
+        
+        if ($slot_index === -1) {
+            return array(
+                'success' => false,
+                'message' => __('指定された時間のスケジュールが見つかりません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 在庫を増やす（最大在庫数を超えないように）
+        $max_stock = $time_slots[$slot_index]['max_stock'];
+        $current_stock = $time_slots[$slot_index]['current_stock'];
+        $new_stock = min($max_stock, $current_stock + 1);
+        
+        $time_slots[$slot_index]['current_stock'] = $new_stock;
+        error_log("WPSR Increase Stock Debug - Date: {$schedule_date}, Time: {$schedule_time}, Old Stock: {$current_stock}, New Stock: {$new_stock}");
+        
+        // データベースを更新
+        $result = $wpdb->update(
+            $wpdb->prefix . 'wpsr_schedules',
+            array('time_slots_with_stock' => json_encode($time_slots)),
+            array('id' => $schedule->id),
+            array('%s'),
+            array('%d')
+        );
+        
+        if ($result === false) {
+            return array(
+                'success' => false,
+                'message' => __('在庫の更新に失敗しました。', 'wp-simple-reservation')
+            );
+        }
+        
+        return array('success' => true);
+    }
+    
+    /**
+     * 在庫を直接減らす（新規予約作成時用）
+     */
+    private function decrease_stock($schedule_date, $schedule_time) {
+        global $wpdb;
+        
+        // 指定日のスケジュールを取得
+        $schedule = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}wpsr_schedules WHERE date = %s",
+            $schedule_date
+        ));
+        
+        if (!$schedule) {
+            return array(
+                'success' => false,
+                'message' => __('指定された日付のスケジュールが見つかりません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 時間枠データを解析
+        $time_slots = json_decode($schedule->time_slots_with_stock, true);
+        if (!$time_slots) {
+            return array(
+                'success' => false,
+                'message' => __('スケジュールデータが正しくありません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 指定時間のスロットを検索
+        $slot_index = -1;
+        $schedule_time_formatted = substr($schedule_time, 0, 5);
+        
+        foreach ($time_slots as $index => $slot) {
+            if ($slot['time'] === $schedule_time_formatted) {
+                $slot_index = $index;
+                break;
+            }
+        }
+        
+        if ($slot_index === -1) {
+            return array(
+                'success' => false,
+                'message' => __('指定された時間のスケジュールが見つかりません。', 'wp-simple-reservation')
+            );
+        }
+        
+        // 在庫を減らす
+        if ($time_slots[$slot_index]['current_stock'] > 0) {
+            $time_slots[$slot_index]['current_stock']--;
+            error_log("WPSR Decrease Stock Debug - Date: {$schedule_date}, Time: {$schedule_time}, New Stock: {$time_slots[$slot_index]['current_stock']}");
+        } else {
+            return array(
+                'success' => false,
+                'message' => __('この時間は満席です。', 'wp-simple-reservation')
+            );
+        }
+        
+        // データベースを更新
+        $result = $wpdb->update(
+            $wpdb->prefix . 'wpsr_schedules',
+            array('time_slots_with_stock' => json_encode($time_slots)),
+            array('id' => $schedule->id),
+            array('%s'),
+            array('%d')
+        );
         
         if ($result === false) {
             return array(
@@ -1111,18 +1295,24 @@ class WPSR_Admin {
             wp_send_json_error(__('予約の更新に失敗しました。', 'wp-simple-reservation'));
         }
         
-        // ステータスが変更された場合、在庫を再計算
+        // ステータスが変更された場合、在庫を適切に調整
         if ($status_changed) {
-            error_log("WPSR Update Reservation Debug - Status changed from '{$old_status}' to '{$status}', recalculating stock for date: {$schedule_date}");
+            error_log("WPSR Update Reservation Debug - Status changed from '{$old_status}' to '{$status}', adjusting stock for date: {$schedule_date}");
             
-            // ステータス変更の方向性をログ出力
             if ($old_status === 'cancelled' && in_array($status, ['confirmed', 'pending'])) {
-                error_log("WPSR Update Reservation Debug - Cancelled reservation being reactivated, stock will decrease");
+                // キャンセル済みから有効なステータスに変更：在庫を減らす
+                error_log("WPSR Update Reservation Debug - Cancelled reservation being reactivated, decreasing stock");
+                $stock_result = $this->decrease_stock($schedule_date, $schedule_time);
             } elseif (in_array($old_status, ['confirmed', 'pending']) && $status === 'cancelled') {
-                error_log("WPSR Update Reservation Debug - Active reservation being cancelled, stock will increase");
+                // 有効なステータスからキャンセルに変更：在庫を増やす
+                error_log("WPSR Update Reservation Debug - Active reservation being cancelled, increasing stock");
+                $stock_result = $this->increase_stock($schedule_date, $schedule_time);
+            } else {
+                // その他のステータス変更：在庫に影響なし
+                error_log("WPSR Update Reservation Debug - Status change does not affect stock");
+                $stock_result = array('success' => true);
             }
             
-            $stock_result = $this->recalculate_stock($schedule_date);
             if (!$stock_result['success']) {
                 wp_send_json_error($stock_result['message']);
             }
@@ -1183,8 +1373,8 @@ class WPSR_Admin {
             wp_send_json_error(__('予約のキャンセルに失敗しました。', 'wp-simple-reservation'));
         }
         
-        // 在庫を再計算（キャンセル後の状態で）
-        $stock_result = $this->recalculate_stock($reservation->schedule_date);
+        // キャンセル時は在庫を直接増やす
+        $stock_result = $this->increase_stock($reservation->schedule_date, $reservation->schedule_time);
         if (!$stock_result['success']) {
             wp_send_json_error($stock_result['message']);
         }
@@ -1232,9 +1422,9 @@ class WPSR_Admin {
             wp_send_json_error(__('予約の削除に失敗しました。', 'wp-simple-reservation'));
         }
         
-        // 在庫を再計算（削除後の状態で）
+        // 削除時は在庫を直接増やす（キャンセル済みでない場合のみ）
         if ($reservation->status !== 'cancelled') {
-            $stock_result = $this->recalculate_stock($reservation->schedule_date);
+            $stock_result = $this->increase_stock($reservation->schedule_date, $reservation->schedule_time);
             if (!$stock_result['success']) {
                 wp_send_json_error($stock_result['message']);
             }
@@ -1535,7 +1725,7 @@ class WPSR_Admin {
      * Googleカレンダー設定ページをレンダリング
      */
     public function render_google_calendar_page() {
-        // Googleカレンダーマネージャーを取得
+        // Googleカレンダーマネージャーを取得（既に初期化されている場合は使用）
         global $wpsr_google_calendar;
         if (!isset($wpsr_google_calendar)) {
             require_once WPSR_PLUGIN_PATH . 'includes/class-wpsr-google-calendar.php';
@@ -1750,6 +1940,18 @@ class WPSR_Admin {
                     case 'textarea':
                         $data[$field_key] = sanitize_textarea_field($_POST[$field_key]);
                         break;
+                    case 'checkbox':
+                        // チェックボックスは配列として送信されるため、カンマ区切りの文字列に変換
+                        if (is_array($_POST[$field_key])) {
+                            $sanitized_values = array();
+                            foreach ($_POST[$field_key] as $value) {
+                                $sanitized_values[] = sanitize_text_field($value);
+                            }
+                            $data[$field_key] = implode(',', $sanitized_values);
+                        } else {
+                            $data[$field_key] = sanitize_text_field($_POST[$field_key]);
+                        }
+                        break;
                     default:
                         $data[$field_key] = sanitize_text_field($_POST[$field_key]);
                         break;
@@ -1789,8 +1991,8 @@ class WPSR_Admin {
         
         $reservation_id = $wpdb->insert_id;
         
-        // 在庫を再計算
-        $stock_result = $this->recalculate_stock($schedule_date);
+        // 新規予約作成時は在庫を直接減らす
+        $stock_result = $this->decrease_stock($schedule_date, $schedule_time);
         if (!$stock_result['success']) {
             wp_send_json_error($stock_result['message']);
         }

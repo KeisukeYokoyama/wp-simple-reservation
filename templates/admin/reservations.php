@@ -364,6 +364,11 @@ if (!empty($where_values)) {
                         <option value="cancelled">キャンセル</option>
                     </select>
             </div>
+            
+            <div class="wpsr-form-group">
+                    <label for="wpsr-reservation-message">メッセージ</label>
+                    <textarea id="wpsr-reservation-message" name="message" rows="3" placeholder="予約に関するメモがあれば入力してください"></textarea>
+            </div>
                 
                 <div class="wpsr-notice">
                     <p><strong>⚠️ 注意事項</strong></p>
@@ -378,7 +383,8 @@ if (!empty($where_values)) {
             <!-- 動的フィールドセクション -->
             <div class="wpsr-form-section">
                 <h3>予約者情報</h3>
-                <div id="wpsr-dynamic-fields-container">
+                <p class="wpsr-field-note">予約者情報は表示のみです。変更が必要な場合はメッセージ欄に記録してください。</p>
+                <div id="wpsr-dynamic-fields">
                     <!-- 動的フィールドがここに生成されます -->
                 </div>
             </div>
@@ -791,6 +797,79 @@ if (!empty($where_values)) {
     flex: 1;
 }
 
+/* 新規予約作成用のフィールドスタイル */
+.wpsr-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wpsr-checkbox-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    transition: background-color 0.2s;
+}
+
+.wpsr-checkbox-option:hover {
+    background-color: #f5f5f5;
+}
+
+.wpsr-checkbox-option input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.wpsr-checkbox-option label {
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+    flex: 1;
+}
+
+/* 検索フォーム用のチェックボックススタイル */
+.wpsr-search-group .wpsr-checkbox-group {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+    margin-top: 5px;
+}
+
+.wpsr-search-group .wpsr-checkbox-group .wpsr-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.wpsr-search-group .wpsr-checkbox-group .wpsr-checkbox:hover {
+    background: none;
+}
+
+.wpsr-search-group .wpsr-checkbox-group .wpsr-checkbox input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.wpsr-search-group .wpsr-checkbox-group .wpsr-checkbox span {
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+    color: #333;
+}
+
+/* 読み取り専用フィールドのスタイル（使用されなくなったCSSを削除しシンプル化） */
+
 .wpsr-modal-footer {
     padding: 15px 20px;
     border-top: 1px solid #ddd;
@@ -948,7 +1027,14 @@ function generateDynamicFields(reservationData) {
     var container = document.getElementById('wpsr-dynamic-fields');
     container.innerHTML = '';
     
+    // デバッグ用：関数の引数をコンソールに出力
+    console.log('generateDynamicFields called with:', reservationData);
+    console.log('wpsrFormFields:', wpsrFormFields);
+    
     wpsrFormFields.forEach(function(field) {
+        console.log('Processing field:', field);
+        console.log('Field value from reservationData:', reservationData[field.field_key]);
+        
         var fieldDiv = document.createElement('div');
         fieldDiv.className = 'wpsr-form-group';
         
@@ -978,16 +1064,13 @@ function createFormInput(field, reservationData) {
         case 'tel':
         case 'date':
             input = document.createElement('input');
-            input.type = field.field_type;
+            input.type = 'text'; // 全てtextとして表示（読み取り専用）
             input.id = 'wpsr-reservation-' + field.field_key;
             input.name = field.field_key;
             input.value = fieldValue;
-            if (field.required == 1) {
-                input.required = true;
-            }
-            if (field.field_placeholder) {
-                input.placeholder = field.field_placeholder;
-            }
+            input.readOnly = true; // 読み取り専用に設定
+            input.style.backgroundColor = '#f5f5f5'; // 読み取り専用の視覚的表示
+            input.style.cursor = 'not-allowed';
             break;
             
         case 'textarea':
@@ -996,67 +1079,93 @@ function createFormInput(field, reservationData) {
             input.name = field.field_key;
             input.rows = 4;
             input.textContent = fieldValue;
-            if (field.required == 1) {
-                input.required = true;
-            }
-            if (field.field_placeholder) {
-                input.placeholder = field.field_placeholder;
-            }
+            input.readOnly = true; // 読み取り専用に設定
+            input.style.backgroundColor = '#f5f5f5'; // 読み取り専用の視覚的表示
+            input.style.cursor = 'not-allowed';
             break;
             
         case 'radio':
-            input = document.createElement('div');
-            input.className = 'wpsr-radio-group';
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.readOnly = true;
+            input.style.backgroundColor = '#f5f5f5';
+            input.style.cursor = 'not-allowed';
             
+            // 選択された値のラベルを表示
             try {
                 var options = JSON.parse(field.field_options.replace(/\\/g, ''));
-                Object.keys(options).forEach(function(key) {
-                    var radioDiv = document.createElement('div');
-                    radioDiv.className = 'wpsr-radio-option';
-                    
-                    var radio = document.createElement('input');
-                    radio.type = 'radio';
-                    radio.id = 'wpsr-reservation-' + field.field_key + '_' + key;
-                    radio.name = field.field_key;
-                    radio.value = key;
-                    radio.checked = (fieldValue === key);
-                    if (field.required == 1) {
-                        radio.required = true;
-                    }
-                    
-                    var radioLabel = document.createElement('label');
-                    radioLabel.htmlFor = 'wpsr-reservation-' + field.field_key + '_' + key;
-                    radioLabel.textContent = options[key];
-                    
-                    radioDiv.appendChild(radio);
-                    radioDiv.appendChild(radioLabel);
-                    input.appendChild(radioDiv);
-                });
+                input.value = options[fieldValue] || fieldValue || '';
             } catch (e) {
                 console.error('Error parsing radio options:', e);
+                input.value = fieldValue || '';
             }
             break;
             
         case 'select':
-            input = document.createElement('select');
+            input = document.createElement('input');
+            input.type = 'text';
             input.id = 'wpsr-reservation-' + field.field_key;
             input.name = field.field_key;
-            if (field.required == 1) {
-                input.required = true;
-            }
+            input.readOnly = true;
+            input.style.backgroundColor = '#f5f5f5';
+            input.style.cursor = 'not-allowed';
             
+            // 選択された値のラベルを表示
             try {
                 var options = JSON.parse(field.field_options.replace(/\\/g, ''));
-                Object.keys(options).forEach(function(key) {
-                    var option = document.createElement('option');
-                    option.value = key;
-                    option.textContent = options[key];
-                    option.selected = (fieldValue === key);
-                    input.appendChild(option);
-                });
+                input.value = options[fieldValue] || fieldValue || '';
             } catch (e) {
                 console.error('Error parsing select options:', e);
+                input.value = fieldValue || '';
             }
+            break;
+            
+        case 'checkbox':
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.readOnly = true;
+            input.style.backgroundColor = '#f5f5f5';
+            input.style.cursor = 'not-allowed';
+            
+            // 選択された値のラベルをカンマ区切りで表示
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                var selectedValues = fieldValue ? fieldValue.split(',') : [];
+                var selectedLabels = [];
+                
+                selectedValues.forEach(function(value) {
+                    if (options[value]) {
+                        selectedLabels.push(options[value]);
+                    }
+                });
+                
+                input.value = selectedLabels.join(', ') || '';
+            } catch (e) {
+                console.error('Error parsing checkbox options:', e);
+                input.value = fieldValue || '';
+            }
+            break;
+            
+        case 'gender':
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'wpsr-reservation-' + field.field_key;
+            input.name = field.field_key;
+            input.readOnly = true;
+            input.style.backgroundColor = '#f5f5f5';
+            input.style.cursor = 'not-allowed';
+            
+            // 性別の値を日本語で表示
+            var genderOptions = {
+                'male': '男性',
+                'female': '女性'
+            };
+            
+            input.value = genderOptions[fieldValue] || fieldValue || '';
             break;
             
         default:
@@ -1065,6 +1174,9 @@ function createFormInput(field, reservationData) {
             input.id = 'wpsr-reservation-' + field.field_key;
             input.name = field.field_key;
             input.value = fieldValue;
+            input.readOnly = true; // 読み取り専用に設定
+            input.style.backgroundColor = '#f5f5f5'; // 読み取り専用の視覚的表示
+            input.style.cursor = 'not-allowed';
             break;
     }
     
@@ -1086,16 +1198,28 @@ function openReservationModal(reservationId) {
             if (response.success) {
                 var reservation = response.data;
                 
-                // 基本情報を設定
-                document.getElementById('wpsr-reservation-id').value = reservation.id;
-                document.getElementById('wpsr-reservation-date').value = reservation.schedule_date;
-                document.getElementById('wpsr-reservation-time').value = reservation.schedule_time;
-                document.getElementById('wpsr-reservation-status').value = reservation.status;
-                document.getElementById('wpsr-reservation-message').value = reservation.message || '';
+                // デバッグ用：予約データをコンソールに出力
+                console.log('Reservation data:', reservation);
+                console.log('Form fields:', wpsrFormFields);
                 
-                // 日付と時間フィールドを読み取り専用に設定
-                document.getElementById('wpsr-reservation-date').readOnly = true;
-                document.getElementById('wpsr-reservation-time').readOnly = true;
+                // 基本情報を設定（要素の存在チェック付き）
+                var idElement = document.getElementById('wpsr-reservation-id');
+                var dateElement = document.getElementById('wpsr-reservation-date');
+                var timeElement = document.getElementById('wpsr-reservation-time');
+                var statusElement = document.getElementById('wpsr-reservation-status');
+                var messageElement = document.getElementById('wpsr-reservation-message');
+                
+                if (idElement) idElement.value = reservation.id;
+                if (dateElement) {
+                    dateElement.value = reservation.schedule_date;
+                    dateElement.readOnly = true;
+                }
+                if (timeElement) {
+                    timeElement.value = reservation.schedule_time;
+                    timeElement.readOnly = true;
+                }
+                if (statusElement) statusElement.value = reservation.status;
+                if (messageElement) messageElement.value = reservation.message || '';
                 
                 // 動的フィールドを生成
                 generateDynamicFields(reservation);
@@ -1103,7 +1227,7 @@ function openReservationModal(reservationId) {
                 // モーダルを表示
                 document.getElementById('wpsr-reservation-modal').style.display = 'block';
             } else {
-                alert('予約データの取得に失敗しました: ' + response.data);
+                alert('予約データの取得に失敗しました: ' . response.data);
             }
         },
         error: function() {
@@ -1242,6 +1366,74 @@ function createAddFormInput(field, reservationData) {
             }
             break;
             
+        case 'checkbox':
+            input = document.createElement('div');
+            input.className = 'wpsr-checkbox-group';
+            
+            try {
+                var options = JSON.parse(field.field_options.replace(/\\/g, ''));
+                // チェックボックスの値はカンマ区切りで保存される
+                var selectedValues = fieldValue ? fieldValue.split(',') : [];
+                
+                Object.keys(options).forEach(function(key) {
+                    var checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'wpsr-checkbox-option';
+                    
+                    var checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                    checkbox.name = field.field_key + '[]';
+                    checkbox.value = key;
+                    checkbox.checked = (selectedValues.indexOf(key) !== -1);
+                    // チェックボックスは個別にrequiredにしない（グループ全体でrequiredチェックを行う）
+                    
+                    var checkboxLabel = document.createElement('label');
+                    checkboxLabel.htmlFor = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                    checkboxLabel.textContent = options[key];
+                    
+                    checkboxDiv.appendChild(checkbox);
+                    checkboxDiv.appendChild(checkboxLabel);
+                    input.appendChild(checkboxDiv);
+                });
+            } catch (e) {
+                console.error('Error parsing checkbox options:', e);
+            }
+            break;
+            
+        case 'gender':
+            input = document.createElement('div');
+            input.className = 'wpsr-radio-group';
+            
+            // 性別のオプションを定義
+            var genderOptions = {
+                'male': '男性',
+                'female': '女性'
+            };
+            
+            Object.keys(genderOptions).forEach(function(key) {
+                var radioDiv = document.createElement('div');
+                radioDiv.className = 'wpsr-radio-option';
+                
+                var radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.id = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                radio.name = field.field_key;
+                radio.value = key;
+                radio.checked = (fieldValue === key);
+                if (field.required == 1) {
+                    radio.required = true;
+                }
+                
+                var radioLabel = document.createElement('label');
+                radioLabel.htmlFor = 'wpsr-add-reservation-' + field.field_key + '_' + key;
+                radioLabel.textContent = genderOptions[key];
+                
+                radioDiv.appendChild(radio);
+                radioDiv.appendChild(radioLabel);
+                input.appendChild(radioDiv);
+            });
+            break;
+            
         default:
             input = document.createElement('input');
             input.type = 'text';
@@ -1369,6 +1561,43 @@ document.addEventListener('DOMContentLoaded', function() {
     // 新規予約作成フォームの送信
     document.getElementById('wpsr-add-reservation-form').addEventListener('submit', function(e) {
         e.preventDefault();
+        
+        // チェックボックスグループの必須チェック
+        var checkboxGroups = this.querySelectorAll('.wpsr-checkbox-group');
+        checkboxGroups.forEach(function(group) {
+            var checkboxes = group.querySelectorAll('input[type="checkbox"]');
+            var checkedCount = 0;
+            var requiredField = null;
+            
+            checkboxes.forEach(function(checkbox) {
+                if (checkbox.checked) {
+                    checkedCount++;
+                }
+                // 最初のチェックボックスをrequiredフィールドとして使用
+                if (!requiredField) {
+                    requiredField = checkbox;
+                }
+            });
+            
+            // チェックボックスグループが必須で、かつ何も選択されていない場合
+            if (checkboxes.length > 0 && checkedCount === 0) {
+                // 最初のチェックボックスにrequired属性を設定してHTML5バリデーションを発動
+                requiredField.required = true;
+                requiredField.setCustomValidity('少なくとも1つ選択してください');
+            } else {
+                // 選択されている場合はrequired属性を削除
+                if (requiredField) {
+                    requiredField.required = false;
+                    requiredField.setCustomValidity('');
+                }
+            }
+        });
+        
+        // HTML5バリデーションをチェック
+        if (!this.checkValidity()) {
+            this.reportValidity();
+            return;
+        }
         
         var formData = new FormData(this);
         formData.append('action', 'wpsr_create_reservation');

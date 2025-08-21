@@ -17,7 +17,7 @@ class WPSR_Form_Manager {
         'name' => array(
             'type' => 'text',
             'label' => 'お名前',
-            'placeholder' => '山田太郎',
+            'placeholder' => '例：山田太郎',
             'required' => true,
             'visible' => true,
             'sort_order' => 1,
@@ -26,7 +26,7 @@ class WPSR_Form_Manager {
         'email' => array(
             'type' => 'email',
             'label' => 'メールアドレス',
-            'placeholder' => 'example@email.com',
+            'placeholder' => '例：example@email.com',
             'required' => true,
             'visible' => true,
             'sort_order' => 2,

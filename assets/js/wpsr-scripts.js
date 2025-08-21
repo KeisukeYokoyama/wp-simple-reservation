@@ -150,7 +150,7 @@
             <div class="wpsr-date-weekday">${dateInfo.weekday}</div>
         `);
         
-        // クリックイベント
+        // 全ての日付でクリック可能（締切日チェックは時間帯選択時に行う）
         card.on('click', function() {
             selectDate(dateInfo);
         });
@@ -222,7 +222,7 @@
         const container = $('#wpsr-time-slots');
         
         if (timeSlots.length === 0) {
-            container.html('<p class="wpsr-no-date">この日は予約可能な時間がありません</p>');
+            container.html('<p class="wpsr-no-date">予約可能な時間がありません</p>');
             return;
         }
         
@@ -234,35 +234,32 @@
             const isDeadlinePassed = checkBookingDeadline(selectedDate, slot.time);
             
             if (isDeadlinePassed) {
-                // 締切日を過ぎている場合は「TEL」と表示
+                // 締切日を過ぎている場合は時間のみ表示（×はCSSで表示）
                 html += `
                     <button type="button" class="wpsr-time-slot deadline-passed" 
                             data-time="${slot.time}" disabled>
                         <span class="wpsr-time-text">${slot.time}</span>
-                        <span class="wpsr-deadline-label">TEL</span>
                     </button>
                 `;
             } else {
                 // 在庫チェック
                 console.log('WPSR Stock Check:', slot.time, 'current_stock:', slot.current_stock, 'type:', typeof slot.current_stock);
                 if (slot.current_stock !== undefined && slot.current_stock !== null && parseInt(slot.current_stock) <= 0) {
-                    // 在庫なしの場合はグレーアウトして×表示
+                    // 在庫なしの場合は時間のみ表示（×はCSSで表示）
                     console.log('WPSR Creating full slot for:', slot.time);
                     html += `
                         <button type="button" class="wpsr-time-slot wpsr-time-slot-full" 
                                 data-time="${slot.time}" disabled>
                             <span class="wpsr-time-text">${slot.time}</span>
-                            <span class="wpsr-full-label">×</span>
                         </button>
                     `;
                 } else {
-                    // 通常の時間枠（在庫情報付き）
-                    const stockInfo = slot.current_stock ? `（残り${slot.current_stock}）` : '';
-                    console.log('WPSR Creating normal slot for:', slot.time, 'stock:', stockInfo);
+                    // 通常の時間枠
+                    console.log('WPSR Creating normal slot for:', slot.time);
                     html += `
                         <button type="button" class="wpsr-time-slot" 
                                 data-time="${slot.time}">
-                            <span class="wpsr-time-text">${slot.time}${stockInfo}</span>
+                            <span class="wpsr-time-text">${slot.time}</span>
                         </button>
                     `;
                 }
@@ -293,7 +290,7 @@
      * 時間枠がない場合の表示
      */
     function displayNoTimeSlots() {
-        $('#wpsr-time-slots').html('<p class="wpsr-no-date">この日は予約可能な時間がありません</p>');
+        $('#wpsr-time-slots').html('<p class="wpsr-no-date">予約可能な時間がありません</p>');
     }
     
     /**
@@ -318,8 +315,16 @@
     function handleFormSubmit(e) {
         e.preventDefault();
         
+        // 重複送信を防ぐため、送信ボタンを無効化
+        const $submitBtn = $('#wpsr-submit');
+        if ($submitBtn.prop('disabled')) {
+            return;
+        }
+        $submitBtn.prop('disabled', true);
+        
         // バリデーション
         if (!validateForm()) {
+            $submitBtn.prop('disabled', false);
             return;
         }
         
@@ -328,6 +333,26 @@
         
         // フォームデータを取得
         const formData = new FormData($('#wpsr-form')[0]);
+        
+        // チェックボックスの値を手動で追加（FormDataの制限を回避）
+        $('.wpsr-checkbox-group').each(function() {
+            const checkboxGroup = $(this);
+            const fieldName = checkboxGroup.find('input[type="checkbox"]').first().attr('name');
+            const checkedBoxes = checkboxGroup.find('input[type="checkbox"]:checked');
+            
+            // 既存の値を削除
+            formData.delete(fieldName);
+            
+            if (checkedBoxes.length > 0) {
+                const values = checkedBoxes.map(function() {
+                    return this.value;
+                }).get().join(',');
+                formData.append(fieldName, values);
+            } else {
+                formData.append(fieldName, '');
+            }
+        });
+        
         formData.append('action', 'wpsr_save_session_data');
         formData.append('nonce', wpsr_ajax.nonce);
         
@@ -354,6 +379,7 @@
                 } else {
                     console.log('WPSR Ajax Error Response:', response);
                     showError(response.data || wpsr_ajax.strings.error);
+                    $submitBtn.prop('disabled', false);
                 }
             },
             error: function(xhr, status, error) {
@@ -375,6 +401,7 @@
                 }
                 
                 showError(errorMessage);
+                $submitBtn.prop('disabled', false);
             }
         });
     }
@@ -401,7 +428,12 @@
                         value = fieldGroup.find('input[type="radio"]:checked').val();
                     } else if (input.attr('type') === 'checkbox') {
                         // チェックボックスの場合
-                        value = fieldGroup.find('input[type="checkbox"]:checked').val();
+                        const checkedBoxes = fieldGroup.find('input[type="checkbox"]:checked');
+                        if (checkedBoxes.length > 0) {
+                            value = checkedBoxes.map(function() {
+                                return this.value;
+                            }).get().join(',');
+                        }
                     } else {
                         // その他の入力フィールド
                         value = input.val();
@@ -559,21 +591,32 @@
         
         // 日数制限のチェック
         if (deadlineDays > 0) {
-            // 予約日が当日かどうかをチェック
-            if (bookingDate === today) {
-                // 当日の場合は時間制限をチェック
+            const todayObj = new Date();
+            todayObj.setHours(0, 0, 0, 0);
+            const bookingDateObj = new Date(selectedDate);
+            bookingDateObj.setHours(0, 0, 0, 0);
+            
+            // 今日から deadlineDays 日後より前の日付は締切
+            const deadlineDate = new Date(todayObj);
+            deadlineDate.setDate(todayObj.getDate() + deadlineDays);
+            
+            if (bookingDateObj < deadlineDate) {
+                // 締切日を過ぎている場合
                 if (deadlineHours > 0) {
-                    // 現在時刻から○時間後が予約時間を過ぎているかチェック
-                    const currentTimeObj = new Date();
-                    const deadlineTime = new Date(bookingDateTime);
-                    deadlineTime.setHours(deadlineTime.getHours() - deadlineHours);
-                    
-                    if (currentTimeObj > deadlineTime) {
-                        return 'この日時は予約締切日（' + deadlineDays + '日前かつ' + deadlineHours + '時間前まで）を過ぎているため、予約できません。';
-                    }
+                    return 'この日時は予約締切日（' + deadlineDays + '日前かつ' + deadlineHours + '時間前まで）を過ぎているため、予約できません。';
                 } else {
-                    // 時間制限がない場合は当日は全て締切
                     return 'この日時は予約締切日（' + deadlineDays + '日前まで）を過ぎているため、予約できません。';
+                }
+            }
+            
+            // 日数制限内だが時間制限をチェック（当日の場合）
+            if (bookingDate === today && deadlineHours > 0) {
+                const currentTimeObj = new Date();
+                const deadlineTime = new Date(bookingDateTime);
+                deadlineTime.setHours(deadlineTime.getHours() - deadlineHours);
+                
+                if (currentTimeObj > deadlineTime) {
+                    return 'この日時は予約締切日（' + deadlineHours + '時間前まで）を過ぎているため、予約できません。';
                 }
             }
         } else if (deadlineHours > 0) {
@@ -621,6 +664,56 @@
         
         // ツールチップを表示
         timeSlot.append(tooltip);
+        
+        // 3秒後に自動で非表示
+        setTimeout(function() {
+            tooltip.fadeOut(300, function() {
+                $(this).remove();
+            });
+        }, 3000);
+    }
+    
+    /**
+     * 日付の締切日チェック（現在は使用していない）
+     * 締切日チェックは時間帯選択時に行う
+     */
+    function checkDateDeadline(date) {
+        // 日付レベルでの締切日チェックは無効化
+        // 全ての日付で選択可能にし、時間帯選択時に締切日チェックを行う
+        return false;
+    }
+    
+    /**
+     * 日付の締切日ツールチップを表示
+     */
+    function showDateDeadlineTooltip(dateCard) {
+        const deadlineDays = parseInt(wpsr_ajax.deadline_days || 0);
+        const deadlineHours = parseInt(wpsr_ajax.deadline_hours || 0);
+        
+        let message = 'この日付は予約締切日を過ぎています。';
+        if (deadlineDays > 0 || deadlineHours > 0) {
+            let deadlineText = '';
+            if (deadlineDays > 0) {
+                deadlineText += deadlineDays + '日前';
+            }
+            if (deadlineHours > 0) {
+                if (deadlineText) {
+                    deadlineText += 'かつ';
+                }
+                deadlineText += deadlineHours + '時間前';
+            }
+            message += '（締切：' + deadlineText + 'まで）';
+        }
+        message += 'お電話でご確認ください。';
+        
+        // 既存のツールチップを削除
+        $('.wpsr-date-deadline-tooltip').remove();
+        
+        // 新しいツールチップを作成
+        const tooltip = $('<div class="wpsr-date-deadline-tooltip">' + message + '</div>');
+        
+        // ツールチップを表示
+        dateCard.append(tooltip);
         
         // 3秒後に自動で非表示
         setTimeout(function() {
